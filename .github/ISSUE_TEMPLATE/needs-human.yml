@@ -1,0 +1,47 @@
+name: Needs human — approval gate
+description: An agent reached a human-in-the-loop gate (AGENTS.md §4) and has stopped.
+title: "[NEEDS-HUMAN] <action>"
+labels: ["needs-human"]
+body:
+  - type: input
+    id: raised_by
+    attributes:
+      label: Raised by
+      placeholder: "claude-code/ci-cd on ci/SPR0-release-job@1a2b3c4"
+    validations: { required: true }
+  - type: dropdown
+    id: gate
+    attributes:
+      label: Gate
+      options:
+        - Secrets / environment variables
+        - Hosted database (staging or production)
+        - Deployment / promotion
+        - Repository settings / branch protection
+        - Disabling or weakening a check
+        - Major dependency change
+        - Cost / free-plan quota
+        - Irreversible data change
+        - Red check on a protected branch
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What I want to do and why
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes:
+      label: Exact commands or settings
+      render: shell
+    validations: { required: true }
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk
+    validations: { required: true }
+  - type: textarea
+    id: rollback
+    attributes:
+      label: Rollback plan
+    validations: { required: true }
