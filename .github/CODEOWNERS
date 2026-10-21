@@ -1,0 +1,40 @@
+# CODEOWNERS — who is asked to review changes to each path (mirrors AGENTS.md §7).
+# Later lines win in this file, so the general rules come first.
+#
+# TODO (Systems Architect): replace the handles below with the actual department leads
+# once the roster is confirmed. Until then, the Systems Architect reviews everything.
+#   Frontend lead: @<frontend-lead-github-handle>
+#   Backend lead:  @<backend-lead-github-handle>
+
+# Default — Systems Architect and repository owner
+*                                   @syedsibtainhaidergardezi-png @Asadjafri9
+
+# Frontend
+/src/app/                           @syedsibtainhaidergardezi-png
+/src/components/                    @syedsibtainhaidergardezi-png
+/src/features/                      @syedsibtainhaidergardezi-png
+/src/styles/                        @syedsibtainhaidergardezi-png
+/public/                            @syedsibtainhaidergardezi-png
+/dashboard-mockup/                  @syedsibtainhaidergardezi-png
+/docs/design/                       @syedsibtainhaidergardezi-png
+
+# Backend (listed after frontend so these sub-paths override it)
+/supabase/                          @syedsibtainhaidergardezi-png
+/src/app/api/                       @syedsibtainhaidergardezi-png
+/src/lib/                           @syedsibtainhaidergardezi-png
+/src/middleware.ts                  @syedsibtainhaidergardezi-png
+/src/features/*/server/             @syedsibtainhaidergardezi-png
+/src/features/*/api/                @syedsibtainhaidergardezi-png
+/docs/api/                          @syedsibtainhaidergardezi-png
+
+# Integration
+/tests/e2e/                         @syedsibtainhaidergardezi-png
+
+# Systems — governance is always the Systems Architect's call
+/AGENTS.md                          @syedsibtainhaidergardezi-png
+/CLAUDE.md                          @syedsibtainhaidergardezi-png
+/GEMINI.md                          @syedsibtainhaidergardezi-png
+/.github/                           @syedsibtainhaidergardezi-png
+/scripts/                           @syedsibtainhaidergardezi-png
+/docs/systems/                      @syedsibtainhaidergardezi-png
+/docs/adr/                          @syedsibtainhaidergardezi-png
