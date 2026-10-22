@@ -235,7 +235,7 @@ This map is enforced by `scripts/branch-guard.sh` and mirrored in `.github/CODEO
 | `tests/e2e/**` | **Integration** |
 | `package.json`, `pnpm-lock.yaml` | **Shared** (Frontend and Backend may edit; Systems reviews) |
 | `docs/design/**`, `dashboard-mockup/**`, `public/**`, `src/app/**` (except `api/`), `src/components/**`, `src/features/**` (except `server/` and `api/`), `src/styles/**`, `tailwind.config.*`, `postcss.config.*`, `components.json` | **Frontend** |
-| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, root `*.md` and `*.pdf`, `docs/**` (other than above), `.github/**`, `scripts/**`, `.agents/**`, config files (`tsconfig*.json`, `next.config.*`, `eslint.config.*`, `vitest.config.*`, `playwright.config.*`, `.nvmrc`, `.gitignore`, `.env.example`, `vercel.json`) | **Systems** (CI/CD shares `.github/workflows/**` and `scripts/**`) |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, root `*.md` and `*.pdf`, `docs/**` (other than above), `.github/**`, `scripts/**`, `.agents/**`, `ui-ux-pro-max/**`, config files (`tsconfig*.json`, `next.config.*`, `eslint.config.*`, `vitest.config.*`, `playwright.config.*`, `pnpm-workspace.yaml`, `.nvmrc`, `.gitignore`, `.env.example`, `vercel.json`) | **Systems** (CI/CD shares `.github/workflows/**` and `scripts/**`) |
 
 A path that matches nothing is **unowned** — the guard fails and the Systems Architect assigns it.
 

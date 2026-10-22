@@ -53,7 +53,7 @@ owner_of() {
       echo shared ;;
     docs/design/*|dashboard-mockup/*|public/*|src/app/*|src/components/*|src/features/*|src/styles/*|tailwind.config.*|postcss.config.*|components.json)
       echo frontend ;;
-    AGENTS.md|CLAUDE.md|GEMINI.md|*.md|*.pdf|docs/*|.github/*|scripts/*|.agents/*|tsconfig*.json|next.config.*|eslint.config.*|.eslintrc*|vitest.config.*|playwright.config.*|.nvmrc|.gitignore|.env.example|vercel.json)
+    AGENTS.md|CLAUDE.md|GEMINI.md|*.md|*.pdf|docs/*|.github/*|scripts/*|.agents/*|ui-ux-pro-max/*|tsconfig*.json|next.config.*|eslint.config.*|.eslintrc*|vitest.config.*|playwright.config.*|pnpm-workspace.yaml|.nvmrc|.gitignore|.env.example|vercel.json)
       echo systems ;;
     *)
       echo unowned ;;
