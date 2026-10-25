@@ -1,0 +1,29 @@
+name: branch-guard
+
+# Enforces AGENTS.md branch flow and path ownership on every pull request.
+# Make this a required status check once branch protection is enabled (docs/systems/branching.md §5).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check branch flow and path ownership
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/branch-guard.sh "$HEAD_REF" "$BASE_REF" "origin/${BASE_REF}...${HEAD_SHA}"

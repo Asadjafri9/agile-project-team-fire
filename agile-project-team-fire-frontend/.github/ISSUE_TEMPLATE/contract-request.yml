@@ -1,0 +1,30 @@
+name: Contract request — frontend needs something from backend
+description: A field, endpoint, error code or permission the frontend needs that the backend does not expose yet.
+title: "[CONTRACT] <feature>: <what is needed>"
+labels: ["type:contract", "area:backend"]
+body:
+  - type: input
+    id: requester
+    attributes:
+      label: Requested by
+      placeholder: "opencode/frontend on fe/MET-02-burndown@1a2b3c4"
+    validations: { required: true }
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement ID(s)
+      placeholder: "MET-02"
+    validations: { required: true }
+  - type: textarea
+    id: need
+    attributes:
+      label: What the UI needs
+      description: The data shape you expect (TypeScript type or example JSON), plus the route or function you expected to call.
+      render: typescript
+    validations: { required: true }
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Which screen or interaction is blocked, and what mock you are using meanwhile.
+    validations: { required: true }
