@@ -8,7 +8,7 @@ Source: [WBS_Agile_PM_Platform.pdf](WBS_Agile_PM_Platform.pdf), six pages, dated
 
 Build a private, browser-based Scrum project management application that lets a team prioritise a backlog, plan and run sprints, collaborate on a board, and produce trustworthy delivery metrics and course assessment evidence.
 
-The user confirmed:
+The team agreed:
 
 - Agentic implementation; optimise for development speed, concurrent usage, and backend security.
 - Supabase **Free** for backend services and Vercel for the web application. No paid infrastructure is required by this design.
@@ -161,7 +161,7 @@ Start a sprint with A=3 and B=5 points (`C=8`). Complete A: original/current rem
 | SEC-04 | Login/provisioning/password changes have provider throttling plus persistent application throttling where needed. Do not use per-process memory as the only limiter on Vercel. Protected pages and responses are private and never shared-cache user data. |
 | SEC-05 | Rich-text/file/CSV exports resist script injection, unsafe filenames, and spreadsheet formula injection. Attachment downloads force safe content handling; SVG, HTML, and executable types are excluded. |
 | CON-01 | Editable entities use integer versions. Two writers submitting the same version cannot both overwrite a row. Conflict responses preserve the user's attempted edit for review. |
-| CON-02 | Mutations include a UUID idempotency key, scoped to actor and project. Repeating an identical key/payload returns its recorded result; reusing a key with a different payload is rejected. |
+| CON-02 | *Deferred to Increment 4 by [ADR-012](docs/adr/012-concurrency-scope-trim.md).* Mutations include a UUID idempotency key, scoped to actor and project. Repeating an identical key/payload returns its recorded result; reusing a key with a different payload is rejected. |
 | CON-03 | Sprint lifecycle/scope locks coordinate with board edits. Reads remain available. Database constraints enforce one active sprint, valid estimates/statuses, and same-project relationships even under concurrent requests. |
 | CON-04 | Item state/history and sprint snapshots cannot diverge after failures, retries, reconnects, or process termination. Storage operations use a recoverable pending/finalised lifecycle because files and SQL are not one transaction. |
 | PERF-01 | Initial design envelope: 20 simultaneous active users, 10,000 stored items/project, up to 500 in an active sprint. These are benchmark targets, not Supabase Free guarantees. |
@@ -207,7 +207,7 @@ Ranges below include every leaf deliverable in that part of the PDF.
 | 1.1–1.7 | PROC-01; section 7; architecture ADRs; deployment CI |
 | 2.1–2.6 | PROC-02; metrics definitions; per-sprint process portfolio |
 | 3.1–3.7 | architecture.md; deployment.md; Sprint 0 release gate |
-| 4.1 | AUTH-01–03; public self-registration deferred by user's ID/password scope |
+| 4.1 | AUTH-01–03; public self-registration deferred by the team's ID/password scope ([ADR-013](docs/adr/013-wbs-deviations.md)) |
 | 4.2–4.3 | PROJ-01–05; permission matrix |
 | 4.4–4.8 | ITEM-01–08 |
 | 4.9 | Increment 1 release gate and demo evidence |
@@ -227,7 +227,7 @@ These defaults permit implementation planning; they are not additional confirmed
 
 | Question | Proposed default |
 | --- | --- |
-| Does “ID” mean username or email? | Username; no email dependency. |
+| Does “ID” mean username or email? | **Decided:** username; no email dependency. |
 | Can Developers edit others' items and estimates? | Yes, within their project; active-sprint estimates stay locked. |
 | Should Done enforce completed criteria/checklists? | Yes; see BOARD-06. |
 | How long is each sprint and when is submission? | Decide before scheduling; do not invent calendar dates. |

@@ -1,6 +1,6 @@
 # Agile Project — Team Fire: system architecture
 
-Status: proposed implementation design, aligned with the user's answers on 2026-10-21. Read [requirements.md](requirements.md) for scope and business rules and [deployment.md](deployment.md) for rollout. The repository currently contains documentation and the source PDF, not an implemented application.
+Status: proposed connected-application design, aligned with the team's decisions on 2026-10-21; §6 is simplified by [ADR-012](docs/adr/012-concurrency-scope-trim.md) and agent workflow is governed by [AGENTS.md](AGENTS.md). Read [requirements.md](requirements.md) for scope and business rules and [deployment.md](deployment.md) for rollout. The repository also contains a browser-local sample-data frontend prototype; the connected application described here has not been implemented.
 
 ## 1. Recommended stack
 
@@ -141,7 +141,7 @@ History/snapshot tables expose no mutation grants to normal users. Prevent accid
 
 Supabase password authentication accepts email/phone identities, so a username is an application adapter, not a native username provider. Provision each normalised username with an internal deterministic identity such as `username@accounts.team-fire.invalid`; restrict usernames to lowercase ASCII letters, digits, underscore, and hyphen, 3–32 characters. This reserved invalid domain is never used for email delivery or represented as a real verified email address.
 
-Restricted operator tooling creates and confirms these synthetic identities with Supabase Auth, records the username profile, and distributes credentials separately. Public signups and email-based recovery are disabled. The login handler normalises the username, derives the internal identity, and invokes normal password login; it does not need a service-role key. If provisioning partly fails, retry idempotently or remove the orphan before issuing credentials. Password changes require reauthentication; forgotten passwords use the operator runbook. If the user intended real email IDs, remove this adapter and use email/password instead.
+Restricted operator tooling creates and confirms these synthetic identities with Supabase Auth, records the username profile, and distributes credentials separately. Public signups and email-based recovery are disabled. The login handler normalises the username, derives the internal identity, and invokes normal password login; it does not need a service-role key. If provisioning partly fails, retry idempotently or remove the orphan before issuing credentials. Password changes require reauthentication; forgotten passwords use the operator runbook. If the team later switches to real email IDs, remove this adapter and use email/password instead.
 
 Disabling an account first sets its database profile's disabled timestamp and then disables the Auth identity through operator tooling. Database policies/RPCs check that timestamp so an already-issued JWT cannot continue reading or writing through the direct Data API. Re-enabling is equally explicit. Do not depend only on expiry of existing access tokens.
 

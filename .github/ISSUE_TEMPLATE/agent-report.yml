@@ -1,0 +1,66 @@
+name: Agent report — cross-department finding
+description: Security, dependency, contract, integration or build problem found in another department's work (AGENTS.md §3).
+title: "[SEC|DEP|CONTRACT|INTEG|BUILD] <area>: <one-line summary>"
+labels: ["agent-report"]
+body:
+  - type: input
+    id: found_by
+    attributes:
+      label: Found by
+      description: "<tool>/<role> on <branch>@<short sha>"
+      placeholder: "claude-code/frontend on fe/BOARD-02-drag@1a2b3c4"
+    validations: { required: true }
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options: [Security, Dependency, Contract, Integration, Build, Other]
+    validations: { required: true }
+  - type: dropdown
+    id: affects
+    attributes:
+      label: Owning department (who must fix it)
+      options: [Frontend, Backend, Systems / CI-CD, Integration]
+    validations: { required: true }
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options: [blocker, high, medium, low]
+    validations: { required: true }
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: File paths with line numbers, and the commit.
+    validations: { required: true }
+  - type: textarea
+    id: what
+    attributes:
+      label: What is wrong
+    validations: { required: true }
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Exact command and output, a code excerpt, or reproduction steps. Never paste secrets.
+      render: text
+    validations: { required: true }
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What breaks, for whom, and which requirement ID fails.
+    validations: { required: true }
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested fix
+      description: A concrete proposal. The owning department decides.
+    validations: { required: true }
+  - type: dropdown
+    id: blocks
+    attributes:
+      label: Blocks promotion to testing?
+      options: ["yes", "no"]
+    validations: { required: true }
