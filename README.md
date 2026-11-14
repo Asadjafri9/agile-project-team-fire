@@ -4,51 +4,29 @@ A Scrum-focused project management platform for backlog planning, sprint executi
 
 ## What is integrated
 
-- The dashboard at `/` is the local Supabase-backed app served from `public/app/` and the Next.js API routes.
-- The React App Router sample-data prototype is available at `/prototype`. It uses browser-local demo data and does not authenticate or write to Supabase.
+- The dashboard at `/` is the React App Router sample-data prototype. It uses browser-local demo data and does not need Supabase or sign-in.
+- The database-backed dashboard is at `/app/index.html`; it uses `public/app/` and the Next.js API routes and requires a local Supabase stack.
 - `dashboard-mockup/` is the original visual reference.
 - Database schema, row-level security, and write RPCs live under `supabase/migrations/`.
 
-The connected dashboard is for local development. No hosted Supabase project is configured by this repo.
+The connected dashboard and API are for local development. No hosted Supabase project is configured by this repo.
 
-## Run the connected app locally
+## Run the sample-data app locally
 
-Prerequisites: Node.js 24, Corepack with pnpm 12.14, and Docker Desktop running.
+Prerequisites: Node.js 24 and Corepack with pnpm 12.14.
 
 ```bash
 corepack enable
 corepack pnpm install --frozen-lockfile
-npx supabase start
-```
-
-The first Supabase start downloads local Docker images and applies the migrations and seed data. Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the local `ANON_KEY` shown by:
-
-```bash
-npx supabase status -o env
-```
-
-Keep `.env.local` local; it is ignored by Git. Do not use a hosted or production Supabase key here.
-
-Start Next.js:
-
-```bash
 corepack pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The local seed includes these demo accounts:
+Open [http://localhost:3000](http://localhost:3000) and choose **Explore demo**. This sample-data UI works without a database; changes stay in browser storage.
 
-| Username | Password | Sample role |
-| --- | --- | --- |
-| `admin` | `Password123!` | Product Owner |
-| `dev1` | `Password123!` | Developer |
+## Database-backed dashboard
 
-These credentials work only with the local seed. To add the optional Sprint 02 sample data after Supabase starts:
+The integrated dashboard at `/app/index.html` and the API routes need a local Supabase stack. Its schema and seed data are in `supabase/`. Supabase is not required to run the sample-data UI above. If you start the local stack later, use the local API URL and anon key in `.env.local`; do not use hosted or production credentials.
 
-```bash
-docker exec -i supabase_db_team-fire-scrum psql -U postgres -d postgres < supabase/demo-data.sql
-```
-
-The sample-data prototype at [http://localhost:3000/prototype](http://localhost:3000/prototype) can be explored separately without signing in; its changes stay in browser storage.
 
 ## API surface
 

@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { Entry } from '@/components/entry';
 
 export default function Page() {
-  redirect('/app/index.html');
+  return <Entry />;
 }
