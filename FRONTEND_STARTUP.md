@@ -57,7 +57,7 @@ The commands below affect this checkout and browser only. Dependency installatio
 
    Check: the terminal prints a local URL and a ready message. Leave this terminal open. If port 3000 is occupied, Next.js may print another port; use the URL it reports.
 
-3. Open the reported URL in a browser, usually [http://localhost:3000](http://localhost:3000). Select **Explore demo**.
+3. Open the reported URL with `/prototype` in a browser, usually [http://localhost:3000/prototype](http://localhost:3000/prototype). Select **Explore demo**.
 
    Check: the Projects page opens and shows the sample Team Fire project. Open it and visit **Backlog**, **Sprint planning**, **Board**, and **Analytics**. The pages should render without an error overlay.
 

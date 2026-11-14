@@ -1,48 +1,77 @@
-# Team Fire
+# Agile Project — Team Fire
 
-This repository contains a **sample-data prototype** of a Scrum project management workspace. It demonstrates the backlog → sprint planning → board → analytics journey locally. It is not the Supabase-backed product described in [architecture.md](architecture.md), and it does not authenticate users, upload files, send invitations, or deploy a hosted service.
+A Scrum-focused project management platform for backlog planning, sprint execution, collaboration, and delivery analytics.
 
-The team's [agent rules](AGENTS.md) and [branching model](docs/systems/branching.md) govern work on the connected application. This prototype uses Node 24 and pnpm.
+## What is integrated
 
-## Run the prototype
+- The dashboard at `/` is the local Supabase-backed app served from `public/app/` and the Next.js API routes.
+- The React App Router sample-data prototype is available at `/prototype`. It uses browser-local demo data and does not authenticate or write to Supabase.
+- `dashboard-mockup/` is the original visual reference.
+- Database schema, row-level security, and write RPCs live under `supabase/migrations/`.
 
-Use Node.js 24 and Corepack. On Windows PowerShell:
+The connected dashboard is for local development. No hosted Supabase project is configured by this repo.
 
-```powershell
-corepack.cmd pnpm install --frozen-lockfile
-corepack.cmd pnpm dev
+## Run the connected app locally
+
+Prerequisites: Node.js 24, Corepack with pnpm 12.14, and Docker Desktop running.
+
+```bash
+corepack enable
+corepack pnpm install --frozen-lockfile
+npx supabase start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and choose **Explore demo**. On macOS/Linux, use `corepack pnpm` in place of `corepack.cmd pnpm`.
+The first Supabase start downloads local Docker images and applies the migrations and seed data. Copy `.env.example` to `.env.local`, then set `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the local `ANON_KEY` shown by:
 
-The demo includes a sample Team Fire project, synthetic members, work items, completed and active sprints, event history, and a planned sprint. Changes persist in this browser's local storage. **Reset demo** in the sidebar restores the seed. The role switcher shows Product Owner, Scrum Master, Developer, and read-only Viewer behavior; it does not sign in as a real user.
-
-The backlog can create and prioritize items. Sprint planning allocates work and tracks hours and story points separately. The board supports pointer drag and a keyboard-accessible status selector. WIP warnings are advisory; Done requires completed checklist items. Analytics derives burndown, completed-sprint velocity, and item-count CFD from the sample event and commitment data and offers a data table for each chart. Invitations, attachments, and settings are labelled previews with no backend action. Evidence rows are synthetic index examples, **not actual course evidence**.
-
-## Checks
-
-```powershell
-corepack.cmd pnpm typecheck
-corepack.cmd pnpm test
-corepack.cmd pnpm build
+```bash
+npx supabase status -o env
 ```
 
-The tests cover the [requirements metric fixture](requirements.md#reference-acceptance-fixture), WIP and checklist behavior, role permissions, sprint transitions, and reset.
+Keep `.env.local` local; it is ignored by Git. Do not use a hosted or production Supabase key here.
 
-For the browser pass, run `corepack.cmd pnpm build`, then leave `corepack.cmd pnpm start` running in one terminal and run `corepack.cmd pnpm browsercheck` in another. The script expects the app at `http://localhost:3000` and uses a local Chrome installation (override with `CHROME_PATH`). It checks every project screen at 375, 768, 1024, and 1440 pixels, plus board keyboard movement, Viewer controls, modal focus, chart tables, and reset.
+Start Next.js:
+
+```bash
+corepack pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). The local seed includes these demo accounts:
+
+| Username | Password | Sample role |
+| --- | --- | --- |
+| `admin` | `Password123!` | Product Owner |
+| `dev1` | `Password123!` | Developer |
+
+These credentials work only with the local seed. To add the optional Sprint 02 sample data after Supabase starts:
+
+```bash
+docker exec -i supabase_db_team-fire-scrum psql -U postgres -d postgres < supabase/demo-data.sql
+```
+
+The sample-data prototype at [http://localhost:3000/prototype](http://localhost:3000/prototype) can be explored separately without signing in; its changes stay in browser storage.
+
+## API surface
+
+API routes are in `src/pages/api` and use the Supabase session cookie established by the login route.
+
+- `GET /api/health`
+- `POST /api/auth/login`, `/logout`, `/change-password`
+- Project, work item, membership, sprint, invitation, revision, export, and attachment routes under `/api/projects` and `/api/invitations`
+
+## Development commands
+
+```bash
+corepack pnpm typecheck
+corepack pnpm test
+corepack pnpm build
+```
+
+`pnpm test` runs the existing sample-data unit tests. The browser check is available with `corepack pnpm browsercheck` after building and starting the app.
 
 ## Project documents
 
-| Document | Contents |
-| --- | --- |
-| [WBS_Agile_PM_Platform.pdf](WBS_Agile_PM_Platform.pdf) | Work breakdown structure. |
-| [FRONTEND_FEATURES.md](FRONTEND_FEATURES.md) | WBS-derived frontend feature checklist and current prototype gaps. |
-| [AGENTS.md](AGENTS.md) | Team-wide agent roles, branch rules, and path ownership. |
-| [FRONTEND_STARTUP.md](FRONTEND_STARTUP.md) | Local frontend startup and troubleshooting walkthrough. |
-| [requirements.md](requirements.md) | Product scope, role matrix, metric rules, acceptance criteria, and WBS traceability. |
-| [architecture.md](architecture.md) | Proposed connected application architecture and data boundaries. |
-| [deployment.md](deployment.md) | Proposed Supabase/Vercel deployment and recovery plan. |
-| [docs/systems/branching.md](docs/systems/branching.md) | Team branch model and integration process. |
-| [docs/adr/](docs/adr/) | Architecture decision records for branch policy and WBS deviations. |
-
-The earlier [static dashboard mock](dashboard-mockup/) remains available for comparison. The [UI/UX skill source](ui-ux-pro-max/) remains in this repository; its installed Codex copy is separate.
+- [Requirements](requirements.md) and [architecture](architecture.md)
+- [Deployment and recovery](deployment.md)
+- [Frontend features](FRONTEND_FEATURES.md) and [startup guide](FRONTEND_STARTUP.md)
+- [Team agent rules](AGENTS.md) and [branching model](docs/systems/branching.md)
+- [Architecture decision records](docs/adr/)
