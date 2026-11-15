@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const { data, error } = await supabase.rpc('rpc_complete_sprint', {
     p_sprint_id: sprintId,
     p_target_sprint_id: targetSprintId || null,
-    p_expected_version: parseInt(expectedVersion, 10),
+    p_expected_version: Number.isInteger(expectedVersion) ? expectedVersion : null,
   });
 
   if (error) return res.status(400).json({ error: error.message });

@@ -4,12 +4,23 @@ export type Role = 'Product Owner' | 'Scrum Master' | 'Developer' | 'Viewer';
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 export type ItemType = 'Story' | 'Task' | 'Bug';
 export type SprintState = 'planned' | 'active' | 'completed';
-export type WorkItem = { id: string; key: string; title: string; description: string; type: ItemType; priority: Priority; points: number | null; hours: number | null; status: Status; assigneeId: string | null; epic: string; labels: string[]; wbs: string; sprintId: string | null; checklist: { text: string; done: boolean }[]; order: number };
+export type ChecklistEntry = { text: string; done: boolean };
+export type Attachment = { id: string; name: string; size: number; mime: string; uploadedBy: string; at: string };
+export type Comment = { id: string; authorId: string; body: string; mentions: string[]; at: string; editedAt?: string; deleted?: boolean };
+export type Activity = { id: string; itemId: string; kind: string; actor: string; at: string; detail: string };
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
+export type Invitation = { id: string; projectId: string; projectName: string; username: string; name: string; role: Role; invitedBy: string; status: InvitationStatus; expiresAt: string; at: string };
+export type Notification = { id: string; kind: 'mention' | 'invitation'; projectId: string | null; itemId: string | null; text: string; at: string; read: boolean };
+export type WorkItem = { id: string; key: string; title: string; description: string; type: ItemType; priority: Priority; points: number | null; hours: number | null; status: Status; assigneeId: string | null; epic: string; labels: string[]; wbs: string; sprintId: string | null; checklist: ChecklistEntry[]; order: number;
+  /** Live mode only (absent in demo data). */
+  version?: number; attachments?: Attachment[]; comments?: Comment[] };
 export type Member = { id: string; name: string; initials: string; role: Role; title: string };
 export type Sprint = { id: string; name: string; goal: string; state: SprintState; start: string; end: string; pointCapacity: number; hourCapacity: number; originalItemIds: string[]; frozenPoints: Record<string, number>; completedAt?: string; result?: { delivered: number; originalDelivered: number; commitment: number; cutoff: string } };
 export type Event = { id: string; sequence: number; at: string; sprintId: string; itemId: string; kind: 'scope-add' | 'scope-remove' | 'status'; status?: Status; points?: number; actor: string };
 export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string };
-export type Project = { id: string; name: string; code: string; description: string; timezone: string; wip: Record<Status, number>; members: Member[]; items: WorkItem[]; sprints: Sprint[]; events: Event[]; evidence: Evidence[] };
+export type Project = { id: string; name: string; code: string; description: string; timezone: string; wip: Record<Status, number>; members: Member[]; items: WorkItem[]; sprints: Sprint[]; events: Event[]; evidence: Evidence[];
+  /** Live mode only (absent in demo data). invitations are visible to Product Owner / Scrum Master only. */
+  ownerId?: string; archived?: boolean; invitations?: Invitation[]; activity?: Activity[]; storage?: { used: number; budget: number } };
 export type DemoState = { version: number; entered: boolean; role: Role; projects: Project[] };
 
 const members: Member[] = [
@@ -61,4 +72,29 @@ export const initialState: DemoState = {
   }],
 };
 
-export const cloneInitialState = (): DemoState => JSON.parse(JSON.stringify(initialState));
+const DAY = 86400000;
+/**
+ * The sample data is authored around Sprint 02 starting 2026-10-19. Rebase every
+ * date so Sprint 02 always started five days before `today`: the demo then opens
+ * mid-sprint, Sprint 03 is startable, and charts show current days.
+ */
+export function rebaseDemoDates(state: DemoState, today: Date = new Date()): DemoState {
+  const anchor = Date.parse('2026-10-19T00:00:00Z');
+  const target = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`) - 5 * DAY;
+  const shift = Math.round((target - anchor) / DAY) * DAY;
+  if (!shift) return state;
+  const date = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + shift).toISOString().slice(0, 10);
+  const instant = (t: string) => new Date(Date.parse(t) + shift).toISOString();
+  for (const p of state.projects) {
+    for (const sp of p.sprints) {
+      sp.start = date(sp.start); sp.end = date(sp.end);
+      if (sp.completedAt) sp.completedAt = instant(sp.completedAt);
+      if (sp.result) sp.result.cutoff = instant(sp.result.cutoff);
+    }
+    for (const e of p.events) e.at = instant(e.at);
+    for (const ev of p.evidence) ev.date = date(ev.date);
+  }
+  return state;
+}
+
+export const cloneInitialState = (today?: Date): DemoState => rebaseDemoDates(JSON.parse(JSON.stringify(initialState)), today);
