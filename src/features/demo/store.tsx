@@ -1,6 +1,6 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
-import { cloneInitialState, DemoState, Event, ItemType, Priority, Role, Sprint, Status, WorkItem } from './model';
+import { ChecklistEntry, cloneInitialState, DemoState, Evidence, Event, Invitation, ItemType, Notification, Priority, Role, Sprint, Status, WorkItem } from './model';
 import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postAction, WorkspacePayload } from './live';
 
 export type Action =
@@ -8,22 +8,45 @@ export type Action =
   | { type: 'create-project'; name: string }
   | { type: 'create-sprint'; projectId: string; name: string }
   | { type: 'create-item'; projectId: string; title: string; typeName: ItemType; points: number | null; priority: Priority }
-  | { type: 'update-item'; projectId: string; itemId: string; patch: Partial<Pick<WorkItem, 'title' | 'description' | 'points' | 'hours' | 'assigneeId' | 'priority' | 'epic'>> }
+  | { type: 'update-item'; projectId: string; itemId: string; patch: Partial<Pick<WorkItem, 'title' | 'description' | 'points' | 'hours' | 'assigneeId' | 'priority' | 'epic' | 'labels'>> }
   | { type: 'prioritize'; projectId: string; itemId: string; direction: -1 | 1 }
   | { type: 'check'; projectId: string; itemId: string; index: number }
-  | { type: 'allocate'; projectId: string; itemId: string; sprintId: string | null }
+  | { type: 'allocate'; projectId: string; itemId: string; sprintId: string | null; reason?: string }
   | { type: 'move'; projectId: string; itemId: string; status: Status }
   | { type: 'sprint'; projectId: string; sprintId: string; patch: Partial<Pick<Sprint, 'goal' | 'start' | 'end' | 'pointCapacity' | 'hourCapacity'>> }
   | { type: 'start'; projectId: string; sprintId: string }
-  | { type: 'complete'; projectId: string; sprintId: string };
+  | { type: 'complete'; projectId: string; sprintId: string; targetSprintId?: string | null }
+  // ---- Live-only actions (ignored by the demo reducer) ----
+  | { type: 'invite'; projectId: string; username: string; role: Role }
+  | { type: 'respond-invite'; invitationId: string; accept: boolean }
+  | { type: 'revoke-invite'; projectId: string; invitationId: string }
+  | { type: 'set-role'; projectId: string; userId: string; role: Role }
+  | { type: 'remove-member'; projectId: string; userId: string }
+  | { type: 'leave'; projectId: string }
+  | { type: 'transfer-owner'; projectId: string; userId: string }
+  | { type: 'archive-project'; projectId: string }
+  | { type: 'archive-item'; projectId: string; itemId: string; reason: string }
+  | { type: 'set-wip'; projectId: string; limits: Partial<Record<Status, number | null>> }
+  | { type: 'set-checklist'; projectId: string; itemId: string; checklist: ChecklistEntry[] }
+  | { type: 'add-evidence'; projectId: string; evidence: Omit<Evidence, 'id'> }
+  | { type: 'remove-evidence'; projectId: string; evidenceId: string }
+  | { type: 'comment'; projectId: string; itemId: string; body: string; mentions: string[] }
+  | { type: 'edit-comment'; projectId: string; itemId: string; commentId: string; body: string; mentions: string[] }
+  | { type: 'delete-comment'; projectId: string; itemId: string; commentId: string }
+  | { type: 'add-attachment'; projectId: string; itemId: string; path: string; name: string; size: number; mime: string }
+  | { type: 'remove-attachment'; projectId: string; itemId: string; attachmentId: string }
+  | { type: 'read-notifications'; ids?: string[] };
 
-export function allowed(role: Role, action: 'create' | 'prioritize' | 'plan' | 'move' | 'complete' | 'team'): boolean {
+/** Actions that only exist against the live backend. */
+export const LIVE_ONLY_ACTIONS = new Set<Action['type']>(['invite', 'respond-invite', 'revoke-invite', 'set-role', 'remove-member', 'leave', 'transfer-owner', 'archive-project', 'archive-item', 'set-wip', 'set-checklist', 'add-evidence', 'remove-evidence', 'comment', 'edit-comment', 'delete-comment', 'add-attachment', 'remove-attachment', 'read-notifications']);
+
+/** Mirrors requirements.md §3. The database enforces the same rules; this only hides controls. */
+export type Capability = 'create' | 'prioritize' | 'plan' | 'move' | 'complete' | 'team' | 'archive' | 'wip' | 'evidence' | 'comment' | 'attach';
+export function allowed(role: Role, action: Capability): boolean {
   if (role === 'Viewer') return false;
-  if (action === 'move' || action === 'create') return true;
+  if (action === 'move' || action === 'create' || action === 'evidence' || action === 'comment' || action === 'attach') return true;
   if (action === 'prioritize') return role === 'Product Owner';
-  if (action === 'team') return role === 'Product Owner' || role === 'Scrum Master';
-  if (action === 'complete' || action === 'plan') return role === 'Product Owner' || role === 'Scrum Master';
-  return false;
+  return role === 'Product Owner' || role === 'Scrum Master'; // team, plan, complete, archive, wip
 }
 export const wipWarning = (items: WorkItem[], status: Status, limit: number, movingId: string): boolean => status !== 'Done' && status !== 'To Do' && items.filter(i => i.status === status && i.id !== movingId).length + 1 > limit;
 export const canMoveToDone = (item: WorkItem): boolean => item.checklist.every(c => c.done);
@@ -45,6 +68,8 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
     p.id = `project-${Date.now()}`; p.name = action.name.trim(); p.code = `PRJ`; p.items = []; p.sprints = []; p.events = []; p.evidence = [];
     state.projects.push(p); return state;
   }
+  // Live-only actions have no demo behaviour; the server is the source of truth.
+  if (LIVE_ONLY_ACTIONS.has(action.type) || !('projectId' in action)) return previous;
   const p = state.projects.find(p => p.id === action.projectId);
   if (!p) return previous;
   if (action.type === 'create-sprint') {
@@ -123,6 +148,11 @@ type DemoContextValue = {
   clearError: () => void;
   roles: Record<string, Role>;
   syncing: boolean;
+  /** Live only: the signed-in user's pending invitations and notifications. */
+  inbox: Invitation[];
+  notifications: Notification[];
+  /** Live only: re-fetch the workspace now (e.g. after an attachment upload). */
+  refresh: () => Promise<void>;
 };
 
 const key = 'team-fire-prototype-v1';
@@ -149,6 +179,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const [roles, setRoles] = useState<Record<string, Role>>({});
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [inbox, setInbox] = useState<Invitation[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   const stateRef = useRef(state);
   const modeRef = useRef<Mode>('demo');
@@ -169,6 +201,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     revisionsRef.current = payload.revisions;
     rolesRef.current = payload.roles;
     setRoles(payload.roles);
+    setInbox(payload.inbox ?? []);
+    setNotifications(payload.notifications ?? []);
     setUser(payload.user);
     commit(payload.state);
     setReady(true);
@@ -341,7 +375,8 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   }, [commit]);
 
   const clearError = useCallback(() => setError(null), []);
+  const refresh = useCallback(async () => { await refreshWorkspace(); }, [refreshWorkspace]);
 
-  return <Context.Provider value={{ state, dispatch, ready, mode, user, login, logout, enterDemo, error, clearError, roles, syncing }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ state, dispatch, ready, mode, user, login, logout, enterDemo, error, clearError, roles, syncing, inbox, notifications, refresh }}>{children}</Context.Provider>;
 }
 export function useDemo() { const value = useContext(Context); if (!value) throw new Error('DemoProvider missing'); return value; }
