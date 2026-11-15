@@ -22,10 +22,9 @@ export default async function handler(req, res) {
     // Call single transactional creation RPC
     const { data, error } = await supabase.rpc('rpc_create_project', {
       p_name: name,
-      p_key: key.toUpperCase(),
-      p_description: description,
+      p_key: key ?? null,
+      p_description: description ?? null,
       p_timezone: timezone || 'Asia/Karachi',
-      p_owner_id: user.id,
     });
 
     if (error) return res.status(400).json({ error: error.message });
