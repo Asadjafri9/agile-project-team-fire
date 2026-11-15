@@ -59,6 +59,15 @@ const casey = await as('casey');
 
 let p = fire(await po.ws());
 const pid = p.id;
+// Preconditions: casey is not a member and has no pending invitation (the suite is rerunnable).
+{
+  const caseyMember = p.members.find(m => m.name.startsWith('Casey'));
+  if (caseyMember) await po.act({ type: 'remove-member', projectId: pid, userId: caseyMember.id });
+  for (const i of (p.invitations ?? []).filter(i => i.username === 'casey' && i.status === 'pending')) {
+    await po.act({ type: 'revoke-invite', projectId: pid, invitationId: i.id });
+  }
+  p = fire(await po.ws());
+}
 const hamza = p.members.find(m => m.name.startsWith('Hamza')).id;
 const zara = p.members.find(m => m.name.startsWith('Zara')).id;
 const backlogItem = p.items.filter(i => !i.sprintId).sort((a, b) => a.order - b.order)[0];

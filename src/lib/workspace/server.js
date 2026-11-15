@@ -228,9 +228,18 @@ export function actionToRpc(action) {
 
   switch (action.type) {
     case 'create-project':
-      return { fn: 'rpc_create_project', args: { p_name: str(action.name) ?? '', p_key: null, p_description: null, p_timezone: 'Asia/Karachi' } };
-    case 'create-sprint':
-      return { fn: 'rpc_create_sprint', args: { p_project_id: action.projectId, p_name: str(action.name) ?? '' } };
+      return { fn: 'rpc_create_project', args: { p_name: str(action.name) ?? '', p_key: null, p_description: str(action.description) ?? null, p_timezone: str(action.timezone) || 'Asia/Karachi' } };
+    case 'create-sprint': {
+      const num = v => (Number.isInteger(v) && v >= 0 ? v : undefined);
+      return { fn: 'rpc_create_sprint', args: {
+        p_project_id: action.projectId, p_name: str(action.name) ?? '',
+        ...(str(action.goal) !== undefined ? { p_goal: action.goal } : {}),
+        ...(str(action.start) ? { p_start: action.start } : {}),
+        ...(str(action.end) ? { p_end: action.end } : {}),
+        ...(num(action.pointCapacity) !== undefined ? { p_point_capacity: action.pointCapacity } : {}),
+        ...(num(action.hourCapacity) !== undefined ? { p_hour_capacity: action.hourCapacity } : {}),
+      } };
+    }
     case 'create-item': {
       const type = TYPE_TO_DB[action.typeName];
       const priority = PRIORITY_TO_DB[action.priority];

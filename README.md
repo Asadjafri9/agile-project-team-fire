@@ -14,17 +14,20 @@ Sign in on the home page with one of the demo accounts. Each holds a different r
 | `hamza` | Scrum Master | plan, start and complete sprints; move cards |
 | `zara`, `bilal` | Developer | create and edit items, move cards |
 | `assessor` | Viewer | read everything, change nothing |
+| `casey` | none yet | invite this account from **Team** to try invitations |
 
 The demo password is shared with assessors outside Git (REL-05). **Explore demo** runs the same interface on browser-local sample data with no account.
 
 ## What is integrated
 
-- **Frontend:** Next.js App Router workspace (overview, backlog, sprint planning, board, analytics, team). In live mode every action is applied optimistically and confirmed by the server; failures roll back with a message. Teammates' changes appear within about 4 seconds.
-- **API:** `GET /api/workspace` and `POST /api/actions` ([contract](docs/api/workspace.md)), plus the per-resource routes under `/api/projects`.
-- **Database:** Supabase Postgres with row-level security on every table. All writes go through role-checked SQL functions; status history, scope changes and sprint commitments are recorded for analytics (`supabase/migrations/`).
-- **Auth:** Supabase Auth with username login, cookie sessions, and public signup disabled.
+- **Scrum workflow:** backlog with Product Owner ordering, sprint planning with capacity and start pre-checks, a five-column board with WIP warnings, sprint completion with carry-over, and burndown, velocity and cumulative-flow analytics replayed from stored events.
+- **Team:** invite existing accounts by username (7-day invitations: accept, decline, revoke), change roles, remove members (their assignments are cleared and logged), leave, transfer ownership, archive a project (read-only afterwards).
+- **Work items:** edit every field, checklists, labels, comments with @mentions and notifications, moderation, per-item activity history, archiving with a recorded reason, and file attachments (PDF, PNG, JPEG, text; 10 MB each, per-project budget) in private storage.
+- **Exports:** one-click sprint summary as CSV or PDF, built from the same metrics as the dashboard.
+- **Security:** Supabase Auth with username login and public signup disabled; row-level security on every table; every write goes through a SQL function that checks identity, project membership and role (requirements §3); attachments are readable only by current members through short-lived signed links.
+- **Live updates:** teammates' changes appear within about 4 seconds; edits apply instantly and roll back with a message if the server refuses them.
 
-Not in this release (routes answer `501`): invitations, member role changes, archiving, attachments, PDF export. See the [integration log](docs/systems/integration-log.md).
+Accounts are created by the operator (`scripts/accounts.mjs`), not by public signup (AUTH-03).
 
 ## Run locally
 
@@ -63,6 +66,17 @@ corepack pnpm typecheck
 corepack pnpm test                       # unit tests
 psql "$DB_URL" -f supabase/tests/rpc_security.test.sql          # database permissions
 BASE_URL=… DEMO_PASSWORD=… node tests/e2e/rbac-api.mjs          # auth + RBAC end to end
+BASE_URL=… DEMO_PASSWORD=… node tests/e2e/collab-api.mjs        # invitations, membership, comments, files…
+```
+
+## Operator tasks
+
+```bash
+export SUPABASE_ACCESS_TOKEN=… SUPABASE_PROJECT_REF=…
+node scripts/accounts.mjs create sana "Sana Iqbal" "QA"     # prints a one-time password
+node scripts/accounts.mjs reset sana
+node scripts/accounts.mjs disable sana
+node scripts/accounts.mjs list
 ```
 
 ## Project documents
