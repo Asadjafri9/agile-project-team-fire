@@ -210,6 +210,7 @@ export async function loadWorkspace(supabase, user) {
       username: profile?.username ?? '',
       name: profile?.display_name ?? profile?.username ?? '',
       initials: initials(profile?.display_name ?? profile?.username),
+      email: user.email && !user.email.endsWith('@accounts.team-fire.invalid') ? user.email : null,
     },
     roles,
     // `_inbox` lets the client notice new invitations/notifications while polling.

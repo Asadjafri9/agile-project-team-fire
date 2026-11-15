@@ -157,7 +157,7 @@ function ProjectSettings({ project, role, onClose }: { project: Project; role: R
   </form>;
 }
 
-function AccountSettings({ user }: { user: { username: string; name: string } }) {
+function AccountSettings({ user }: { user: { username: string; name: string; email?: string | null } }) {
   const [current, setCurrent] = useState(''); const [next, setNext] = useState(''); const [confirmation, setConfirmation] = useState('');
   const [busy, setBusy] = useState(false); const [status, setStatus] = useState<{ kind: 'error' | 'success'; message: string } | null>(null);
   async function submit() {
@@ -172,7 +172,7 @@ function AccountSettings({ user }: { user: { username: string; name: string } })
       setStatus({ kind: 'error', message: err instanceof Error && err.message ? err.message : 'Could not change the password.' });
     } finally { setBusy(false); }
   }
-  return <form className="form-stack" onSubmit={e => { e.preventDefault(); void submit(); }}><p className="settings-note">Signed in as <strong>{user.name}</strong> ({user.username}).</p><label>Current password<input type="password" autoComplete="current-password" required value={current} onChange={e => setCurrent(e.target.value)} disabled={busy}/></label><label>New password<input type="password" autoComplete="new-password" required value={next} onChange={e => setNext(e.target.value)} disabled={busy}/></label><label>Confirm new password<input type="password" autoComplete="new-password" required value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={busy}/></label>{status && <p role={status.kind === 'error' ? 'alert' : 'status'} className={`form-status ${status.kind}`}>{status.message}</p>}<button className="button primary" type="submit" disabled={busy || !current || !next || !confirmation}>{busy ? 'Updating…' : 'Change password'}</button></form>;
+  return <form className="form-stack" onSubmit={e => { e.preventDefault(); void submit(); }}><p className="settings-note">Signed in as <strong>{user.name}</strong> ({user.username}{user.email ? ` · ${user.email}` : ''}).</p><label>Current password<input type="password" autoComplete="current-password" required value={current} onChange={e => setCurrent(e.target.value)} disabled={busy}/></label><label>New password<input type="password" autoComplete="new-password" required value={next} onChange={e => setNext(e.target.value)} disabled={busy}/></label><label>Confirm new password<input type="password" autoComplete="new-password" required value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={busy}/></label>{status && <p role={status.kind === 'error' ? 'alert' : 'status'} className={`form-status ${status.kind}`}>{status.message}</p>}<button className="button primary" type="submit" disabled={busy || !current || !next || !confirmation}>{busy ? 'Updating…' : 'Change password'}</button></form>;
 }
 
 function EvidenceView({ project, role }: { project: Project; role: Role }) {

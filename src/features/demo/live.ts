@@ -1,7 +1,7 @@
 import type { DemoState, Invitation, Notification, Role } from './model';
 import type { Action } from './store';
 
-export type LiveUser = { id: string; username: string; name: string; initials: string };
+export type LiveUser = { id: string; username: string; name: string; initials: string; email?: string | null };
 export type WorkspacePayload = { user: LiveUser; roles: Record<string, Role>; revisions: Record<string, number>; state: DemoState; inbox: Invitation[]; notifications: Notification[] };
 
 export class ApiError extends Error {
@@ -41,11 +41,11 @@ export function loginRequest(username: string, password: string): Promise<{ user
   });
 }
 
-export function signupRequest(username: string, displayName: string, password: string): Promise<{ user?: LiveUser; message?: string }> {
+export function signupRequest(email: string, username: string, displayName: string, password: string): Promise<{ user?: LiveUser; message?: string }> {
   return request<{ user?: LiveUser; message?: string }>('/api/auth/signup', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, displayName, password }),
+    body: JSON.stringify({ email, username, displayName, password }),
   });
 }
 

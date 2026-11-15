@@ -13,6 +13,7 @@ export function Entry() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
   const [confirm, setConfirm] = useState('');
   const [pending, setPending] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -25,7 +26,8 @@ export function Entry() {
   const usernameOk = /^[a-z0-9][a-z0-9._-]{1,31}$/.test(normalized);
   const passwordOk = password.length >= 10 && password.length <= 72 && !(normalized && password.toLowerCase().includes(normalized));
   const confirmOk = confirm.length > 0 && confirm === password;
-  const canSignUp = usernameOk && displayName.trim().length > 0 && passwordOk && confirmOk;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const canSignUp = emailOk && usernameOk && displayName.trim().length > 0 && passwordOk && confirmOk;
 
   // A join link visited while signed out is completed right after sign-in / sign-up.
   const afterAuth = async () => {
@@ -60,7 +62,7 @@ export function Entry() {
     setPending(true);
     setAuthError(null);
     try {
-      await signup(normalized, displayName.trim(), password);
+      await signup(email.trim().toLowerCase(), normalized, displayName.trim(), password);
       await afterAuth();
     } catch (error) {
       setAuthError(error instanceof Error && error.message ? error.message : 'Unable to create the account');
@@ -83,15 +85,17 @@ export function Entry() {
           </div>
           {tab === 'signin' ? <form className="form-stack" onSubmit={signIn} style={{ padding: 18, gap: 13 }} aria-labelledby="sign-in-title">
             <h2 id="sign-in-title" style={{ margin: 0, fontSize: 16 }}>Sign in</h2>
-            <label htmlFor="sign-in-username">Username<input id="sign-in-username" name="username" autoComplete="username" required value={username} onChange={e => setUsername(e.target.value)}/></label>
+            <label htmlFor="sign-in-username">Email or username<input id="sign-in-username" name="username" autoComplete="username" placeholder="you@example.com or username" required value={username} onChange={e => setUsername(e.target.value)}/></label>
             <label htmlFor="sign-in-password">Password<input id="sign-in-password" name="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)}/></label>
             {authError && <div role="alert" style={{ color: 'var(--red)', fontSize: 12 }}>{authError}</div>}
             <button className="button primary" type="submit" disabled={pending}>{pending ? 'Signing in…' : 'Sign in'}</button>
             <small style={{ color: 'var(--muted)' }}>New here? <button type="button" className="link-button" onClick={() => switchTab('signup')}>Create an account</button></small>
           </form> : <form className="form-stack" onSubmit={createAccount} style={{ padding: 18, gap: 11 }} aria-labelledby="sign-up-title" noValidate>
             <h2 id="sign-up-title" style={{ margin: 0, fontSize: 16 }}>Create your account</h2>
+            <label htmlFor="sign-up-email">Email<input id="sign-up-email" name="email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"/></label>
+            {email.length > 3 && !emailOk && <small className="auth-hint">• Enter a valid email address</small>}
             <label htmlFor="sign-up-username">Username<input id="sign-up-username" name="username" autoComplete="username" required maxLength={32} value={username} onChange={e => setUsername(e.target.value)} aria-describedby="sign-up-username-hint"/></label>
-            <span id="sign-up-username-hint">{hint(usernameOk, usernameOk ? `You'll sign in as ${normalized}` : '2–32 characters: letters, digits, dot, dash or underscore')}</span>
+            <span id="sign-up-username-hint">{hint(usernameOk, usernameOk ? `Your username: ${normalized} (you can sign in with it or your email)` : '2–32 characters: letters, digits, dot, dash or underscore')}</span>
             <label htmlFor="sign-up-name">Display name<input id="sign-up-name" name="name" autoComplete="name" required maxLength={60} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="e.g. Sana Iqbal"/></label>
             <label htmlFor="sign-up-password">Password<input id="sign-up-password" name="new-password" type="password" autoComplete="new-password" required minLength={10} maxLength={72} value={password} onChange={e => setPassword(e.target.value)} aria-describedby="sign-up-password-hint"/></label>
             <span id="sign-up-password-hint">{hint(passwordOk, 'At least 10 characters, not containing your username')}</span>

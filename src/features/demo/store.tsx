@@ -150,7 +150,7 @@ type DemoContextValue = {
   user: LiveUser | null;
   login: (username: string, password: string) => Promise<void>;
   /** Creates an account (ADR-014) and signs it in. */
-  signup: (username: string, displayName: string, password: string) => Promise<void>;
+  signup: (email: string, username: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   enterDemo: () => void;
   error: string | null;
@@ -351,13 +351,13 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyWorkspace]);
 
-  const signup = useCallback(async (username: string, displayName: string, password: string) => {
+  const signup = useCallback(async (email: string, username: string, displayName: string, password: string) => {
     setError(null);
     setSyncing(true);
     try {
-      const created = await signupRequest(username, displayName, password);
+      const created = await signupRequest(email, username, displayName, password);
       // If the backend did not start a session (e.g. confirmation required), sign in explicitly.
-      if (!created.user) await loginRequest(username, password);
+      if (!created.user) await loginRequest(email, password);
       const payload = await getWorkspace();
       modeRef.current = 'live';
       setMode('live');
