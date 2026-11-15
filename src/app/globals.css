@@ -161,3 +161,13 @@
   .print-report .print-table tr{break-inside:avoid}
   .print-report .print-note{font-size:8.5pt;color:#444;margin:3mm 0 0}
 }
+
+/* account tabs (sign in / create account) */
+.auth-card { padding: 0; overflow: hidden; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line, #e3e7ee); }
+.auth-tabs button { padding: 12px 10px; background: transparent; border: 0; font: inherit; font-weight: 600; color: var(--muted, #6b7486); cursor: pointer; border-bottom: 2px solid transparent; }
+.auth-tabs button.active { color: var(--ink, #14213d); border-bottom-color: var(--ink, #14213d); }
+.auth-tabs button:focus-visible, .link-button:focus-visible { outline: 2px solid var(--focus, #2f6fed); outline-offset: 2px; }
+.auth-hint { display: block; font-size: 12px; color: var(--muted, #6b7486); margin-top: -4px; }
+.auth-hint.ok { color: var(--green, #1f7a4d); }
+.link-button { background: none; border: 0; padding: 0; font: inherit; color: var(--ink, #14213d); text-decoration: underline; cursor: pointer; }

@@ -24,10 +24,10 @@ The demo password is shared with assessors outside Git (REL-05). **Explore demo*
 - **Team:** invite existing accounts by username (7-day invitations: accept, decline, revoke), change roles, remove members (their assignments are cleared and logged), leave, transfer ownership, archive a project (read-only afterwards).
 - **Work items:** edit every field, checklists, labels, comments with @mentions and notifications, moderation, per-item activity history, archiving with a recorded reason, and file attachments (PDF, PNG, JPEG, text; 10 MB each, per-project budget) in private storage.
 - **Exports:** one-click sprint summary as CSV or PDF, built from the same metrics as the dashboard.
-- **Security:** Supabase Auth with username login and public signup disabled; row-level security on every table; every write goes through a SQL function that checks identity, project membership and role (requirements §3); attachments are readable only by current members through short-lived signed links.
+- **Security:** Supabase Auth with username sign-up and login (signups validated in the database, so the Auth API can't be used to bypass the rules); row-level security on every table; every write goes through a SQL function that checks identity, project membership and role (requirements §3); attachments are readable only by current members through short-lived signed links.
 - **Live updates:** teammates' changes appear within about 4 seconds; edits apply instantly and roll back with a message if the server refuses them.
 
-Accounts are created by the operator (`scripts/accounts.mjs`), not by public signup (AUTH-03).
+Anyone can **create an account** from the home page (username, display name, password; see [ADR-014](docs/adr/014-public-signup.md)). A new account starts in no project: create one to become its Product Owner, or ask a teammate to invite your username. Operators can still create, reset or disable accounts with `scripts/accounts.mjs`.
 
 ## Run locally
 
@@ -67,6 +67,7 @@ corepack pnpm test                       # unit tests
 psql "$DB_URL" -f supabase/tests/rpc_security.test.sql          # database permissions
 BASE_URL=… DEMO_PASSWORD=… node tests/e2e/rbac-api.mjs          # auth + RBAC end to end
 BASE_URL=… DEMO_PASSWORD=… node tests/e2e/collab-api.mjs        # invitations, membership, comments, files…
+BASE_URL=… SUPABASE_URL=… SUPABASE_KEY=… node tests/e2e/signup-api.mjs   # registration
 ```
 
 ## Operator tasks

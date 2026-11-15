@@ -1,7 +1,7 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { ChecklistEntry, cloneInitialState, DemoState, Evidence, Event, Invitation, ItemType, Notification, Priority, Role, Sprint, Status, WorkItem } from './model';
-import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postAction, WorkspacePayload } from './live';
+import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postAction, signupRequest, WorkspacePayload } from './live';
 
 export type Action =
   | { type: 'hydrate'; value: DemoState } | { type: 'enter' } | { type: 'role'; role: Role } | { type: 'reset' }
@@ -146,6 +146,8 @@ type DemoContextValue = {
   mode: Mode;
   user: LiveUser | null;
   login: (username: string, password: string) => Promise<void>;
+  /** Creates an account (ADR-014) and signs it in. */
+  signup: (username: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   enterDemo: () => void;
   error: string | null;
@@ -346,6 +348,27 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyWorkspace]);
 
+  const signup = useCallback(async (username: string, displayName: string, password: string) => {
+    setError(null);
+    setSyncing(true);
+    try {
+      const created = await signupRequest(username, displayName, password);
+      // If the backend did not start a session (e.g. confirmation required), sign in explicitly.
+      if (!created.user) await loginRequest(username, password);
+      const payload = await getWorkspace();
+      modeRef.current = 'live';
+      setMode('live');
+      writeMode('live');
+      applyWorkspace(payload);
+    } catch (err) {
+      const message = messageOf(err);
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [applyWorkspace]);
+
   const logout = useCallback(async () => {
     try { await logoutRequest(); } catch { /* The session may already be gone. */ }
     revisionsRef.current = {};
@@ -381,6 +404,6 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
   const refresh = useCallback(async () => { await refreshWorkspace(); }, [refreshWorkspace]);
 
-  return <Context.Provider value={{ state, dispatch, ready, mode, user, login, logout, enterDemo, error, clearError, roles, syncing, inbox, notifications, refresh }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ state, dispatch, ready, mode, user, login, signup, logout, enterDemo, error, clearError, roles, syncing, inbox, notifications, refresh }}>{children}</Context.Provider>;
 }
 export function useDemo() { const value = useContext(Context); if (!value) throw new Error('DemoProvider missing'); return value; }

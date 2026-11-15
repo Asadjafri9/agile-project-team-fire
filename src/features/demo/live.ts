@@ -41,6 +41,14 @@ export function loginRequest(username: string, password: string): Promise<{ user
   });
 }
 
+export function signupRequest(username: string, displayName: string, password: string): Promise<{ user?: LiveUser; message?: string }> {
+  return request<{ user?: LiveUser; message?: string }>('/api/auth/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, displayName, password }),
+  });
+}
+
 export function logoutRequest(): Promise<void> {
   return request<void>('/api/auth/logout', { method: 'POST' });
 }

@@ -67,8 +67,14 @@ const seed = readFileSync(join(process.cwd(), 'supabase', 'seed-demo.sql'), 'utf
   .replaceAll('__DEMO_PASSWORD__', password.replaceAll("'", "''"));
 await sql(seed);
 
-console.log('auth   disable public signup (AUTH-03)');
-await api('/config/auth', { method: 'PATCH', body: JSON.stringify({ disable_signup: true }) });
+// ADR-014: public signup is on by default. Usernames map to an internal address,
+// so email confirmation is impossible and is skipped; the account trigger
+// (migration 20261115030000) validates every identity instead.
+const publicSignup = (process.env.PUBLIC_SIGNUP ?? 'true') !== 'false';
+console.log(`auth   public signup ${publicSignup ? 'ON' : 'OFF'} · min password 10 (ADR-014)`);
+await api('/config/auth', { method: 'PATCH', body: JSON.stringify({
+  disable_signup: !publicSignup, mailer_autoconfirm: true, password_min_length: 10,
+}) });
 
 const [counts] = await sql(`select (select count(*) from public.work_items) as items,
   (select count(*) from public.profiles) as profiles, (select count(*) from public.sprints) as sprints,
