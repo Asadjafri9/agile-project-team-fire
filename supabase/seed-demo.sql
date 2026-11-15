@@ -4,6 +4,7 @@
 --
 -- Accounts (username → role in project FIRE):
 --   ayesha → Product Owner · hamza → Scrum Master · zara, bilal → Developer · assessor → Viewer
+--   casey → no project yet (use it to try invitations)
 
 -- 1. Accounts (the on_auth_user_created trigger creates each profile)
 WITH accounts(id, username, display_name) AS (VALUES
@@ -11,7 +12,8 @@ WITH accounts(id, username, display_name) AS (VALUES
   ('a0000000-0000-4000-8000-000000000002'::uuid, 'hamza', 'Hamza Malik'),
   ('a0000000-0000-4000-8000-000000000003'::uuid, 'zara', 'Zara Ahmed'),
   ('a0000000-0000-4000-8000-000000000004'::uuid, 'bilal', 'Bilal Raza'),
-  ('a0000000-0000-4000-8000-000000000005'::uuid, 'assessor', 'Course Assessor')
+  ('a0000000-0000-4000-8000-000000000005'::uuid, 'assessor', 'Course Assessor'),
+  ('a0000000-0000-4000-8000-000000000006'::uuid, 'casey', 'Casey Noor')
 )
 INSERT INTO auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at,
@@ -41,7 +43,8 @@ INSERT INTO public.profiles (id, username, display_name, title) VALUES
   ('a0000000-0000-4000-8000-000000000002', 'hamza', 'Hamza Malik', 'Delivery lead'),
   ('a0000000-0000-4000-8000-000000000003', 'zara', 'Zara Ahmed', 'Frontend'),
   ('a0000000-0000-4000-8000-000000000004', 'bilal', 'Bilal Raza', 'Backend'),
-  ('a0000000-0000-4000-8000-000000000005', 'assessor', 'Course Assessor', 'Read-only reviewer')
+  ('a0000000-0000-4000-8000-000000000005', 'assessor', 'Course Assessor', 'Read-only reviewer'),
+  ('a0000000-0000-4000-8000-000000000006', 'casey', 'Casey Noor', 'New hire (not in any project yet)')
 ON CONFLICT (id) DO UPDATE SET display_name = EXCLUDED.display_name, title = EXCLUDED.title;
 
 -- 2. Project and membership

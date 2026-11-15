@@ -62,9 +62,17 @@ export async function loadWorkspace(supabase, user) {
 
   const sprintIds = sprints.map(s => s.id);
   const pickSprints = (query) => (sprintIds.length ? query : Promise.resolve(empty));
-  const [commitments, scope] = await Promise.all([
+  const [commitments, scope, invitations, comments, attachments, activity, evidence, notifications, inbox] = await Promise.all([
     must(pickSprints(supabase.from('sprint_commitments').select('sprint_id, work_item_id, frozen_estimate').in('sprint_id', sprintIds))),
     must(pickSprints(supabase.from('sprint_scope_events').select('id, sprint_id, work_item_id, action, estimate_at_event, actor_id, created_at, seq').in('sprint_id', sprintIds).order('seq'))),
+    // RLS returns rows only for projects where the user is a manager (or the invitee).
+    must(pick(supabase.from('project_invitations').select('id, project_id, invitee_id, role, invited_by, status, created_at, expires_at, invitee:profiles!invitee_id(username, display_name)').in('project_id', projectIds).order('created_at', { ascending: false }))),
+    must(pick(supabase.from('work_item_comments').select('id, project_id, work_item_id, author_id, body, mentions, created_at, edited_at, deleted_at').in('project_id', projectIds).order('created_at'))),
+    must(pick(supabase.from('work_item_attachments').select('id, project_id, work_item_id, file_name, size_bytes, mime_type, uploaded_by, created_at').in('project_id', projectIds).is('removed_at', null).order('created_at'))),
+    must(pick(supabase.from('work_item_activity').select('id, project_id, work_item_id, actor_id, kind, detail, created_at').in('project_id', projectIds).order('created_at', { ascending: false }).limit(500))),
+    must(pick(supabase.from('project_evidence').select('id, project_id, title, version, kind, evidence_date, note').in('project_id', projectIds).is('removed_at', null).order('evidence_date', { ascending: false }))),
+    must(supabase.from('notifications').select('id, kind, project_id, work_item_id, text, created_at, read_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)),
+    must(supabase.rpc('rpc_my_invitations')),
   ]);
 
   const sprintProject = Object.fromEntries(sprints.map(s => [s.id, s.project_id]));
@@ -108,6 +116,26 @@ export async function loadWorkspace(supabase, user) {
         description: p.description ?? '',
         timezone: p.timezone,
         archived: Boolean(p.archived_at),
+        ownerId: p.owner_id,
+        storage: {
+          used: attachments.filter(a => a.project_id === p.id).reduce((sum, a) => sum + Number(a.size_bytes), 0),
+          budget: Number(p.storage_budget_bytes ?? 104857600),
+        },
+        invitations: invitations.filter(i => i.project_id === p.id).map(i => ({
+          id: i.id,
+          projectId: i.project_id,
+          projectName: p.name,
+          username: i.invitee?.username ?? '',
+          name: i.invitee?.display_name ?? i.invitee?.username ?? '',
+          role: i.role,
+          invitedBy: i.invited_by,
+          status: i.status === 'PENDING' && new Date(i.expires_at) <= new Date() ? 'expired' : String(i.status).toLowerCase(),
+          expiresAt: toIso(i.expires_at),
+          at: toIso(i.created_at),
+        })),
+        activity: activity.filter(a => a.project_id === p.id).map(a => ({
+          id: a.id, itemId: a.work_item_id, kind: a.kind, actor: a.actor_id, at: toIso(a.created_at), detail: a.detail,
+        })),
         wip: { ...DEFAULT_WIP, ...(p.wip_limits ?? {}) },
         members: members.filter(m => m.project_id === p.id).map(m => ({
           id: m.user_id,
@@ -134,6 +162,12 @@ export async function loadWorkspace(supabase, user) {
           checklist: Array.isArray(i.checklist) ? i.checklist.map(c => ({ text: String(c.text ?? ''), done: Boolean(c.done) })) : [],
           order: i.position,
           version: i.version,
+          attachments: attachments.filter(a => a.work_item_id === i.id).map(a => ({
+            id: a.id, name: a.file_name, size: Number(a.size_bytes), mime: a.mime_type, uploadedBy: a.uploaded_by, at: toIso(a.created_at),
+          })),
+          comments: comments.filter(c => c.work_item_id === i.id).map(c => (c.deleted_at
+            ? { id: c.id, authorId: c.author_id, body: '', mentions: [], at: toIso(c.created_at), deleted: true }
+            : { id: c.id, authorId: c.author_id, body: c.body, mentions: c.mentions ?? [], at: toIso(c.created_at), ...(c.edited_at ? { editedAt: toIso(c.edited_at) } : {}) })),
         })),
         sprints: projectSprints.map(s => {
           const frozen = commitments.filter(c => c.sprint_id === s.id);
@@ -154,7 +188,9 @@ export async function loadWorkspace(supabase, user) {
           };
         }),
         events,
-        evidence: [],
+        evidence: evidence.filter(e => e.project_id === p.id).map(e => ({
+          id: e.id, title: e.title, version: e.version, kind: e.kind, date: e.evidence_date, note: e.note,
+        })),
       };
     }),
   };
@@ -167,8 +203,19 @@ export async function loadWorkspace(supabase, user) {
       initials: initials(profile?.display_name ?? profile?.username),
     },
     roles,
-    revisions: Object.fromEntries(projectIds.map(id => [id, revisions.find(r => r.project_id === id)?.board_revision ?? 1])),
+    // `_inbox` lets the client notice new invitations/notifications while polling.
+    revisions: {
+      ...Object.fromEntries(projectIds.map(id => [id, revisions.find(r => r.project_id === id)?.board_revision ?? 1])),
+      _inbox: (inbox ?? []).length * 1000 + notifications.filter(n => !n.read_at).length,
+    },
     state,
+    inbox: (inbox ?? []).map(i => ({
+      id: i.id, projectId: i.project_id, projectName: i.project_name, username: profile?.username ?? '', name: profile?.display_name ?? '',
+      role: i.role, invitedBy: i.invited_by_name, status: 'pending', expiresAt: toIso(i.expires_at), at: toIso(i.created_at),
+    })),
+    notifications: notifications.map(n => ({
+      id: n.id, kind: n.kind, projectId: n.project_id, itemId: n.work_item_id, text: n.text, at: toIso(n.created_at), read: Boolean(n.read_at),
+    })),
   };
 }
 
@@ -192,7 +239,7 @@ export function actionToRpc(action) {
     }
     case 'update-item': {
       const patch = {};
-      const allowed = ['title', 'description', 'points', 'hours', 'assigneeId', 'priority', 'epic'];
+      const allowed = ['title', 'description', 'points', 'hours', 'assigneeId', 'priority', 'epic', 'labels'];
       for (const key of allowed) if (action.patch && key in action.patch) patch[key] = action.patch[key];
       if ('priority' in patch) {
         patch.priority = PRIORITY_TO_DB[patch.priority];
@@ -217,6 +264,47 @@ export function actionToRpc(action) {
       return { fn: 'rpc_start_sprint', args: { p_sprint_id: action.sprintId } };
     case 'complete':
       return { fn: 'rpc_complete_sprint', args: { p_sprint_id: action.sprintId, p_target_sprint_id: action.targetSprintId ?? null } };
+    case 'invite':
+      return { fn: 'rpc_invite_member', args: { p_project_id: action.projectId, p_username: str(action.username) ?? '', p_role: action.role } };
+    case 'respond-invite':
+      return { fn: 'rpc_respond_invitation', args: { p_invitation_id: action.invitationId, p_accept: action.accept === true } };
+    case 'revoke-invite':
+      return { fn: 'rpc_revoke_invitation', args: { p_invitation_id: action.invitationId } };
+    case 'set-role':
+      return { fn: 'rpc_set_member_role', args: { p_project_id: action.projectId, p_user_id: action.userId, p_role: action.role } };
+    case 'remove-member':
+      return { fn: 'rpc_remove_member', args: { p_project_id: action.projectId, p_user_id: action.userId } };
+    case 'leave':
+      return { fn: 'rpc_leave_project', args: { p_project_id: action.projectId } };
+    case 'transfer-owner':
+      return { fn: 'rpc_transfer_ownership', args: { p_project_id: action.projectId, p_user_id: action.userId } };
+    case 'archive-project':
+      return { fn: 'rpc_archive_project', args: { p_project_id: action.projectId } };
+    case 'archive-item':
+      return { fn: 'rpc_archive_work_item', args: { p_item_id: action.itemId, p_reason: str(action.reason) ?? '' } };
+    case 'set-wip':
+      return { fn: 'rpc_set_wip_limits', args: { p_project_id: action.projectId, p_limits: action.limits ?? {} } };
+    case 'set-checklist':
+      if (!Array.isArray(action.checklist)) throw bad('Checklist must be a list');
+      return { fn: 'rpc_set_checklist', args: { p_item_id: action.itemId, p_checklist: action.checklist.map(c => ({ text: String(c?.text ?? ''), done: Boolean(c?.done) })) } };
+    case 'add-evidence': {
+      const e = action.evidence ?? {};
+      return { fn: 'rpc_add_evidence', args: { p_project_id: action.projectId, p_title: str(e.title) ?? '', p_version: str(e.version) ?? '', p_kind: str(e.kind) ?? 'Other', p_date: str(e.date) || null, p_note: str(e.note) ?? '' } };
+    }
+    case 'remove-evidence':
+      return { fn: 'rpc_remove_evidence', args: { p_evidence_id: action.evidenceId } };
+    case 'comment':
+      return { fn: 'rpc_add_comment', args: { p_item_id: action.itemId, p_body: str(action.body) ?? '', p_mentions: Array.isArray(action.mentions) ? action.mentions : [] } };
+    case 'edit-comment':
+      return { fn: 'rpc_edit_comment', args: { p_comment_id: action.commentId, p_body: str(action.body) ?? '', p_mentions: Array.isArray(action.mentions) ? action.mentions : [] } };
+    case 'delete-comment':
+      return { fn: 'rpc_delete_comment', args: { p_comment_id: action.commentId } };
+    case 'add-attachment':
+      return { fn: 'rpc_add_attachment', args: { p_item_id: action.itemId, p_path: str(action.path) ?? '', p_name: str(action.name) ?? '', p_size: Number(action.size), p_mime: str(action.mime) ?? '' } };
+    case 'remove-attachment':
+      return { fn: 'rpc_remove_attachment', args: { p_attachment_id: action.attachmentId } };
+    case 'read-notifications':
+      return { fn: 'rpc_mark_notifications_read', args: { p_ids: Array.isArray(action.ids) ? action.ids : null } };
     default:
       throw bad(`Unsupported action: ${action.type}`);
   }

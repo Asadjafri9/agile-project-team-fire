@@ -15,6 +15,7 @@ interface QueryBuilder {
   is(...args: unknown[]): QueryBuilder;
   in(...args: unknown[]): QueryBuilder;
   order(...args: unknown[]): QueryBuilder;
+  limit(...args: unknown[]): QueryBuilder;
   then<TResult1 = QueryResult, TResult2 = never>(
     onfulfilled?: ((value: QueryResult) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
@@ -30,10 +31,14 @@ function makeSupabase(fixtures: Fixtures) {
         is: () => builder,
         in: () => builder,
         order: () => builder,
+        limit: () => builder,
         then: (onfulfilled, onrejected) =>
           Promise.resolve({ data: fixtures[table] ?? [], error: null }).then(onfulfilled, onrejected),
       };
       return builder;
+    },
+    rpc(fn: string) {
+      return Promise.resolve({ data: fixtures[`rpc:${fn}`] ?? [], error: null });
     },
   };
 }
@@ -488,7 +493,7 @@ describe('loadWorkspace', () => {
       initials: 'AL',
     });
     expect(workspace.roles).toEqual({ P1: 'Developer' });
-    expect(workspace.revisions).toEqual({ P1: 7 });
+    expect(workspace.revisions).toEqual({ P1: 7, _inbox: 0 });
 
     const state = workspace.state;
     expect(state.version).toBe(1);
@@ -535,6 +540,8 @@ describe('loadWorkspace', () => {
       checklist: [{ text: 'a', done: true }],
       order: 1,
       version: 2,
+      attachments: [],
+      comments: [],
     });
 
     const task = project.items.find((item: WorkspaceItem) => item.id === 'W2')!;
@@ -616,7 +623,7 @@ describe('loadWorkspace', () => {
     const workspace = await loadWorkspace(makeSupabase(fixtures), { id: 'u1' });
 
     expect(workspace.roles).toEqual({});
-    expect(workspace.revisions).toEqual({});
+    expect(workspace.revisions).toEqual({ _inbox: 0 });
     expect(workspace.state.role).toBe('Viewer');
     expect(workspace.state.projects).toEqual([]);
     expect(workspace.user.initials).toBe('AL');
