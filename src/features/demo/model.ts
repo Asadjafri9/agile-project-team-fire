@@ -72,4 +72,29 @@ export const initialState: DemoState = {
   }],
 };
 
-export const cloneInitialState = (): DemoState => JSON.parse(JSON.stringify(initialState));
+const DAY = 86400000;
+/**
+ * The sample data is authored around Sprint 02 starting 2026-10-19. Rebase every
+ * date so Sprint 02 always started five days before `today`: the demo then opens
+ * mid-sprint, Sprint 03 is startable, and charts show current days.
+ */
+export function rebaseDemoDates(state: DemoState, today: Date = new Date()): DemoState {
+  const anchor = Date.parse('2026-10-19T00:00:00Z');
+  const target = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`) - 5 * DAY;
+  const shift = Math.round((target - anchor) / DAY) * DAY;
+  if (!shift) return state;
+  const date = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + shift).toISOString().slice(0, 10);
+  const instant = (t: string) => new Date(Date.parse(t) + shift).toISOString();
+  for (const p of state.projects) {
+    for (const sp of p.sprints) {
+      sp.start = date(sp.start); sp.end = date(sp.end);
+      if (sp.completedAt) sp.completedAt = instant(sp.completedAt);
+      if (sp.result) sp.result.cutoff = instant(sp.result.cutoff);
+    }
+    for (const e of p.events) e.at = instant(e.at);
+    for (const ev of p.evidence) ev.date = date(ev.date);
+  }
+  return state;
+}
+
+export const cloneInitialState = (today?: Date): DemoState => rebaseDemoDates(JSON.parse(JSON.stringify(initialState)), today);

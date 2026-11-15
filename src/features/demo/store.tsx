@@ -5,8 +5,8 @@ import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postActi
 
 export type Action =
   | { type: 'hydrate'; value: DemoState } | { type: 'enter' } | { type: 'role'; role: Role } | { type: 'reset' }
-  | { type: 'create-project'; name: string }
-  | { type: 'create-sprint'; projectId: string; name: string }
+  | { type: 'create-project'; name: string; description?: string; timezone?: string }
+  | { type: 'create-sprint'; projectId: string; name: string; goal?: string; start?: string; end?: string; pointCapacity?: number; hourCapacity?: number }
   | { type: 'create-item'; projectId: string; title: string; typeName: ItemType; points: number | null; priority: Priority }
   | { type: 'update-item'; projectId: string; itemId: string; patch: Partial<Pick<WorkItem, 'title' | 'description' | 'points' | 'hours' | 'assigneeId' | 'priority' | 'epic' | 'labels'>> }
   | { type: 'prioritize'; projectId: string; itemId: string; direction: -1 | 1 }
@@ -75,7 +75,9 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
   if (action.type === 'create-sprint') {
     if (!allowed(state.role, 'plan') || !action.name.trim()) return previous;
     const n = p.sprints.length + 1;
-    p.sprints.push({ id: `s${Date.now()}`, name: action.name.trim(), goal: '', state: 'planned', start: new Date().toISOString().slice(0, 10), end: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), pointCapacity: 20, hourCapacity: 70, originalItemIds: [], frozenPoints: {} });
+    const start = action.start ?? new Date().toISOString().slice(0, 10), end = action.end ?? new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    if (end <= start) return previous;
+    p.sprints.push({ id: `s${Date.now()}`, name: action.name.trim(), goal: action.goal?.trim() ?? '', state: 'planned', start, end, pointCapacity: action.pointCapacity ?? 20, hourCapacity: action.hourCapacity ?? 70, originalItemIds: [], frozenPoints: {} });
   } else if (action.type === 'create-item') {
     if (!allowed(state.role, 'create') || !action.title.trim()) return previous;
     const n = Math.max(100, ...p.items.map(i => Number(i.key.split('-')[1]) || 0)) + 1;
@@ -117,7 +119,8 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
   } else if (action.type === 'start') {
     if (!allowed(state.role, 'plan') || p.sprints.some(s => s.state === 'active')) return previous;
     const s = p.sprints.find(s => s.id === action.sprintId);
-    if (!s || s.state !== 'planned' || s.start >= s.end) return previous;
+    // Issue #4: dates are required and an expired sprint cannot start.
+    if (!s || s.state !== 'planned' || !s.start || !s.end || s.start >= s.end || s.end < new Date().toISOString().slice(0, 10)) return previous;
     s.state = 'active'; s.originalItemIds = p.items.filter(i => i.sprintId === s.id).map(i => i.id);
     s.frozenPoints = Object.fromEntries(p.items.filter(i => i.sprintId === s.id).map(i => [i.id, i.points ?? 0]));
     for (const i of p.items.filter(i => i.sprintId === s.id)) addEvent(state, p.id, { sprintId: s.id, itemId: i.id, kind: 'scope-add', points: i.points ?? 0, status: i.status, actor: 'demo' });
@@ -129,7 +132,8 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
     const originalDelivered = included.filter(i => i.status === 'Done' && s.originalItemIds.includes(i.id)).reduce((sum, i) => sum + (s.frozenPoints[i.id] ?? 0), 0);
     const commitment = Object.values(s.frozenPoints).reduce((a, b) => a + b, 0);
     s.state = 'completed'; s.completedAt = new Date().toISOString(); s.result = { delivered, originalDelivered, commitment, cutoff: s.completedAt };
-    for (const i of included.filter(i => i.status !== 'Done')) i.sprintId = null;
+    const target = action.targetSprintId ? p.sprints.find(t => t.id === action.targetSprintId && t.state === 'planned') : undefined;
+    for (const i of included.filter(i => i.status !== 'Done')) i.sprintId = target?.id ?? null; // SPR-06 carry-over
   }
   return state;
 }
