@@ -1,6 +1,7 @@
 'use client';
-import { createContext, useContext, useEffect, useReducer, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { cloneInitialState, DemoState, Event, ItemType, Priority, Role, Sprint, Status, WorkItem } from './model';
+import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postAction, WorkspacePayload } from './live';
 
 export type Action =
   | { type: 'hydrate'; value: DemoState } | { type: 'enter' } | { type: 'role'; role: Role } | { type: 'reset' }
@@ -108,16 +109,239 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
   return state;
 }
 
+type Mode = 'demo' | 'live';
+type DemoContextValue = {
+  state: DemoState;
+  dispatch: React.Dispatch<Action>;
+  ready: boolean;
+  mode: Mode;
+  user: LiveUser | null;
+  login: (username: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  enterDemo: () => void;
+  error: string | null;
+  clearError: () => void;
+  roles: Record<string, Role>;
+  syncing: boolean;
+};
+
 const key = 'team-fire-prototype-v1';
-const Context = createContext<{ state: DemoState; dispatch: React.Dispatch<Action>; ready: boolean } | null>(null);
+const modeKey = 'team-fire-mode';
+
+function writeMode(mode: Mode) {
+  try { localStorage.setItem(modeKey, mode); } catch { /* Storage can be unavailable; the session still works. */ }
+}
+function messageOf(error: unknown): string {
+  return error instanceof Error && error.message ? error.message : 'Something went wrong';
+}
+function revisionsChanged(next: Record<string, number>, previous: Record<string, number>): boolean {
+  const keys = new Set([...Object.keys(next), ...Object.keys(previous)]);
+  for (const projectId of keys) if (next[projectId] !== previous[projectId]) return true;
+  return false;
+}
+
+const Context = createContext<DemoContextValue | null>(null);
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reduceDemo, undefined, cloneInitialState);
+  const [state, rawDispatch] = useReducer(reduceDemo, undefined, cloneInitialState);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    try { const raw = localStorage.getItem(key); if (raw) dispatch({ type: 'hydrate', value: JSON.parse(raw) }); } catch { /* Corrupt demo data falls back to seed. */ }
-    setReady(true);
+  const [mode, setMode] = useState<Mode>('demo');
+  const [user, setUser] = useState<LiveUser | null>(null);
+  const [roles, setRoles] = useState<Record<string, Role>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  const stateRef = useRef(state);
+  const modeRef = useRef<Mode>('demo');
+  const rolesRef = useRef<Record<string, Role>>({});
+  const revisionsRef = useRef<Record<string, number>>({});
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingRef = useRef(0);
+  const mutationRef = useRef(false);
+
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  const commit = useCallback((next: DemoState) => {
+    stateRef.current = next;
+    rawDispatch({ type: 'hydrate', value: next });
   }, []);
-  useEffect(() => { if (ready) localStorage.setItem(key, JSON.stringify(state)); }, [state, ready]);
-  return <Context.Provider value={{ state, dispatch, ready }}>{children}</Context.Provider>;
+
+  const applyWorkspace = useCallback((payload: WorkspacePayload) => {
+    revisionsRef.current = payload.revisions;
+    rolesRef.current = payload.roles;
+    setRoles(payload.roles);
+    setUser(payload.user);
+    commit(payload.state);
+    setReady(true);
+  }, [commit]);
+
+  const refreshWorkspace = useCallback(async (): Promise<WorkspacePayload | null> => {
+    try {
+      const payload = await getWorkspace();
+      applyWorkspace(payload);
+      return payload;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        rolesRef.current = {};
+        setRoles({});
+      } else {
+        setError(messageOf(err));
+      }
+      return null;
+    }
+  }, [applyWorkspace]);
+
+  useEffect(() => {
+    let stored: Mode = 'demo';
+    try { if (localStorage.getItem(modeKey) === 'live') stored = 'live'; } catch { /* Default to demo. */ }
+    modeRef.current = stored;
+    setMode(stored);
+    if (stored === 'demo') {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) rawDispatch({ type: 'hydrate', value: JSON.parse(raw) });
+      } catch { /* Corrupt demo data falls back to seed. */ }
+      setReady(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      await refreshWorkspace();
+      if (!cancelled) setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [refreshWorkspace]);
+
+  useEffect(() => {
+    if (mode !== 'demo' || modeRef.current !== 'demo' || !ready) return;
+    try { localStorage.setItem(key, JSON.stringify(state)); } catch { /* Storage can be unavailable. */ }
+  }, [state, mode, ready]);
+
+  useEffect(() => {
+    if (mode !== 'live' || !user) return;
+    let disposed = false;
+    const poll = async (force: boolean) => {
+      if (disposed || document.visibilityState !== 'visible' || mutationRef.current) return;
+      try {
+        const payload = await getWorkspace();
+        if (disposed || mutationRef.current) return;
+        if (force || revisionsChanged(payload.revisions, revisionsRef.current)) applyWorkspace(payload);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 401) setUser(null);
+      }
+    };
+    const interval = window.setInterval(() => { void poll(false); }, 4000);
+    const onFocus = () => { void poll(true); };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [mode, user, applyWorkspace]);
+
+  const dispatch = useCallback<React.Dispatch<Action>>((action) => {
+    if (modeRef.current === 'demo') {
+      rawDispatch(action);
+      return;
+    }
+    if (action.type === 'role') {
+      commit(reduceDemo(stateRef.current, action));
+      return;
+    }
+    if (action.type === 'reset' || action.type === 'enter' || action.type === 'hydrate') return;
+
+    const projectId = 'projectId' in action ? action.projectId : null;
+    const role: Role = action.type === 'create-project'
+      ? 'Product Owner'
+      : projectId
+        ? rolesRef.current[projectId] ?? stateRef.current.role
+        : stateRef.current.role;
+
+    const mutationId = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : undefined;
+    const previous = stateRef.current;
+    const base = previous.role === role ? previous : { ...previous, role };
+    commit(reduceDemo(base, action));
+
+    pendingRef.current += 1;
+    setSyncing(true);
+    queueRef.current = queueRef.current
+      .then(async () => {
+        mutationRef.current = true;
+        try {
+          // BOARD-03: a mutation id makes a retried card move write history once.
+          await postAction(action.type === 'move' ? ({ ...action, mutationId } as Action) : action);
+          await refreshWorkspace();
+        } catch (err) {
+          setError(messageOf(err));
+          commit(previous);
+          await refreshWorkspace();
+        } finally {
+          mutationRef.current = false;
+          pendingRef.current = Math.max(0, pendingRef.current - 1);
+          if (pendingRef.current === 0) setSyncing(false);
+        }
+      })
+      .catch(() => {
+        mutationRef.current = false;
+        pendingRef.current = Math.max(0, pendingRef.current - 1);
+        if (pendingRef.current === 0) setSyncing(false);
+      });
+  }, [commit, refreshWorkspace]);
+
+  const login = useCallback(async (username: string, password: string) => {
+    setError(null);
+    setSyncing(true);
+    try {
+      await loginRequest(username, password);
+      const payload = await getWorkspace();
+      modeRef.current = 'live';
+      setMode('live');
+      writeMode('live');
+      applyWorkspace(payload);
+    } catch (err) {
+      const message = messageOf(err);
+      setError(message);
+      throw new Error(message);
+    } finally {
+      setSyncing(false);
+    }
+  }, [applyWorkspace]);
+
+  const logout = useCallback(async () => {
+    try { await logoutRequest(); } catch { /* The session may already be gone. */ }
+    revisionsRef.current = {};
+    rolesRef.current = {};
+    setRoles({});
+    setUser(null);
+    setError(null);
+    commit(cloneInitialState());
+    setReady(true);
+  }, [commit]);
+
+  const enterDemo = useCallback(() => {
+    modeRef.current = 'demo';
+    setMode('demo');
+    writeMode('demo');
+    revisionsRef.current = {};
+    rolesRef.current = {};
+    setRoles({});
+    setUser(null);
+    setError(null);
+    let next = cloneInitialState();
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as DemoState;
+        if (parsed?.version === 1) next = parsed;
+      }
+    } catch { /* Fall back to the seed data. */ }
+    commit(next);
+    setReady(true);
+  }, [commit]);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  return <Context.Provider value={{ state, dispatch, ready, mode, user, login, logout, enterDemo, error, clearError, roles, syncing }}>{children}</Context.Provider>;
 }
 export function useDemo() { const value = useContext(Context); if (!value) throw new Error('DemoProvider missing'); return value; }
