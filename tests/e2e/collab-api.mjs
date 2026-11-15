@@ -214,6 +214,31 @@ if (!SKIP_STORAGE) {
   }
 }
 
+// ---- Evidence documents ------------------------------------------------------
+if (!SKIP_STORAGE) {
+  const signEv = (s, body) => s.call('/api/attachments/sign', { method: 'POST', body: { target: 'evidence', projectId: pid, ...body } });
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  check((await signEv(viewer, { name: 'r.docx', size: 10, mime: DOCX })).status === 403, 'viewer cannot upload evidence documents (403)');
+  check((await signEv(dev, { name: 'x.exe', size: 10, mime: 'application/x-msdownload' })).status === 422, 'evidence rejects executables (422)');
+  const ev = await signEv(dev, { name: 'Sprint review.md', size: 20, mime: 'text/markdown' });
+  check(ev.status === 200 && ev.json?.path?.startsWith(`${pid}/evidence/`), 'developer gets an evidence upload URL', `HTTP ${ev.status}`);
+  if (ev.status === 200) {
+    const put = await fetch(ev.json.signedUrl, { method: 'PUT', headers: { 'content-type': 'text/markdown' }, body: '# Sprint review\nok\n' });
+    check(put.ok, 'evidence document uploads to private storage', `HTTP ${put.status}`);
+    r = await dev.act({ type: 'add-evidence', projectId: pid, evidence: { title: 'E2E review doc', version: 'v1', kind: 'Markdown', date: '2026-11-15', note: 'e2e' }, file: { path: ev.json.path, name: 'Sprint review.md', size: 20, mime: 'text/markdown' } });
+    check(r.status === 200, 'evidence recorded with its document', S(r));
+    const evRow = fire(await viewer.ws()).evidence.find(e => e.id === r.json?.data?.id);
+    check(evRow?.file?.name === 'Sprint review.md', 'evidence lists the document for members');
+    const dl = await viewer.call(`/api/evidence/${evRow?.id}`);
+    check(dl.status === 302, 'viewer downloads the evidence document via signed link');
+    const body = dl.status === 302 ? await (await fetch(dl.headers.get('location'))).text() : '';
+    check(body.startsWith('# Sprint review'), 'downloaded document has the uploaded content');
+    check((await casey.call(`/api/evidence/${evRow?.id}`)).status === 404, 'non-member cannot download evidence (404)');
+    check((await dev.act({ type: 'add-evidence', projectId: pid, evidence: { title: 'forged', version: 'v1', kind: 'PDF', date: '2026-11-15', note: '' }, file: { path: `${pid}/evidence/never-uploaded.pdf`, name: 'x.pdf', size: 5, mime: 'application/pdf' } })).status === 404, 'cannot record a document that was never uploaded (404)');
+    await dev.act({ type: 'remove-evidence', projectId: pid, evidenceId: evRow?.id });
+  }
+}
+
 // ---- Ownership transfer & project archive (PROJ-03, PROJ-05) ---------------
 if (DESTRUCTIVE) {
   r = await po.act({ type: 'create-project', name: 'E2E Scratch' });

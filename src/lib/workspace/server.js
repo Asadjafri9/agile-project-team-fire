@@ -70,7 +70,7 @@ export async function loadWorkspace(supabase, user) {
     must(pick(supabase.from('work_item_comments').select('id, project_id, work_item_id, author_id, body, mentions, created_at, edited_at, deleted_at').in('project_id', projectIds).order('created_at'))),
     must(pick(supabase.from('work_item_attachments').select('id, project_id, work_item_id, file_name, size_bytes, mime_type, uploaded_by, created_at').in('project_id', projectIds).is('removed_at', null).order('created_at'))),
     must(pick(supabase.from('work_item_activity').select('id, project_id, work_item_id, actor_id, kind, detail, created_at').in('project_id', projectIds).order('created_at', { ascending: false }).limit(500))),
-    must(pick(supabase.from('project_evidence').select('id, project_id, title, version, kind, evidence_date, note').in('project_id', projectIds).is('removed_at', null).order('evidence_date', { ascending: false }))),
+    must(pick(supabase.from('project_evidence').select('id, project_id, title, version, kind, evidence_date, note, file_name, size_bytes, mime_type').in('project_id', projectIds).is('removed_at', null).order('evidence_date', { ascending: false }))),
     must(supabase.from('notifications').select('id, kind, project_id, work_item_id, text, created_at, read_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)),
     must(supabase.rpc('rpc_my_invitations')),
   ]);
@@ -118,7 +118,8 @@ export async function loadWorkspace(supabase, user) {
         archived: Boolean(p.archived_at),
         ownerId: p.owner_id,
         storage: {
-          used: attachments.filter(a => a.project_id === p.id).reduce((sum, a) => sum + Number(a.size_bytes), 0),
+          used: attachments.filter(a => a.project_id === p.id).reduce((sum, a) => sum + Number(a.size_bytes), 0)
+            + evidence.filter(e => e.project_id === p.id).reduce((sum, e) => sum + Number(e.size_bytes ?? 0), 0),
           budget: Number(p.storage_budget_bytes ?? 104857600),
         },
         invitations: invitations.filter(i => i.project_id === p.id).map(i => ({
@@ -190,6 +191,7 @@ export async function loadWorkspace(supabase, user) {
         events,
         evidence: evidence.filter(e => e.project_id === p.id).map(e => ({
           id: e.id, title: e.title, version: e.version, kind: e.kind, date: e.evidence_date, note: e.note,
+          ...(e.file_name ? { file: { name: e.file_name, size: Number(e.size_bytes), mime: e.mime_type } } : {}),
         })),
       };
     }),
@@ -298,7 +300,12 @@ export function actionToRpc(action) {
       return { fn: 'rpc_set_checklist', args: { p_item_id: action.itemId, p_checklist: action.checklist.map(c => ({ text: String(c?.text ?? ''), done: Boolean(c?.done) })) } };
     case 'add-evidence': {
       const e = action.evidence ?? {};
-      return { fn: 'rpc_add_evidence', args: { p_project_id: action.projectId, p_title: str(e.title) ?? '', p_version: str(e.version) ?? '', p_kind: str(e.kind) ?? 'Other', p_date: str(e.date) || null, p_note: str(e.note) ?? '' } };
+      const base = { p_project_id: action.projectId, p_title: str(e.title) ?? '', p_version: str(e.version) ?? '', p_kind: str(e.kind) ?? 'Other', p_date: str(e.date) || null, p_note: str(e.note) ?? '' };
+      const f = action.file;
+      if (f && typeof f === 'object') {
+        return { fn: 'rpc_add_evidence_file', args: { ...base, p_path: str(f.path) ?? '', p_name: str(f.name) ?? '', p_size: Number(f.size), p_mime: str(f.mime) ?? '' } };
+      }
+      return { fn: 'rpc_add_evidence', args: base };
     }
     case 'remove-evidence':
       return { fn: 'rpc_remove_evidence', args: { p_evidence_id: action.evidenceId } };

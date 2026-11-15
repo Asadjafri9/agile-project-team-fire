@@ -28,7 +28,7 @@ export type Action =
   | { type: 'archive-item'; projectId: string; itemId: string; reason: string }
   | { type: 'set-wip'; projectId: string; limits: Partial<Record<Status, number | null>> }
   | { type: 'set-checklist'; projectId: string; itemId: string; checklist: ChecklistEntry[] }
-  | { type: 'add-evidence'; projectId: string; evidence: Omit<Evidence, 'id'> }
+  | { type: 'add-evidence'; projectId: string; evidence: Omit<Evidence, 'id' | 'file'>; file?: { path: string; name: string; size: number; mime: string } }
   | { type: 'remove-evidence'; projectId: string; evidenceId: string }
   | { type: 'comment'; projectId: string; itemId: string; body: string; mentions: string[] }
   | { type: 'edit-comment'; projectId: string; itemId: string; commentId: string; body: string; mentions: string[] }

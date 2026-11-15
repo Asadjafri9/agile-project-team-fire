@@ -11,11 +11,11 @@ export default async function handler(req, res) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return res.status(401).json({ error: 'Sign in required' });
 
-  const { itemId, name, size, mime } = req.body ?? {};
+  const { target, projectId, itemId, name, size, mime } = req.body ?? {};
   try {
-    const { data: path, error } = await supabase.rpc('rpc_authorize_upload', {
-      p_item_id: itemId, p_name: String(name ?? ''), p_size: Number(size), p_mime: String(mime ?? ''),
-    });
+    const { data: path, error } = target === 'evidence'
+      ? await supabase.rpc('rpc_authorize_evidence_upload', { p_project_id: projectId, p_name: String(name ?? ''), p_size: Number(size), p_mime: String(mime ?? '') })
+      : await supabase.rpc('rpc_authorize_upload', { p_item_id: itemId, p_name: String(name ?? ''), p_size: Number(size), p_mime: String(mime ?? '') });
     if (error) throw error;
     const { data, error: signError } = await supabase.storage.from('project-attachments').createSignedUploadUrl(path);
     if (signError) return res.status(403).json({ error: 'Upload not permitted' });

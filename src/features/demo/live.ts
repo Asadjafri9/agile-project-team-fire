@@ -100,3 +100,30 @@ export async function uploadAttachment(projectId: string, itemId: string, file: 
 
 /** Opens through a short-lived signed URL; only current project members get one. */
 export const attachmentUrl = (attachmentId: string) => `/api/attachments/${encodeURIComponent(attachmentId)}`;
+
+export const EVIDENCE_TYPES = [
+  'application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/markdown', 'text/csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+] as const;
+export const EVIDENCE_ACCEPT = '.pdf,.png,.jpg,.jpeg,.txt,.md,.csv,.docx,.xlsx,.pptx';
+
+const guessMime = (file: File) => file.type || (/\.md$/i.test(file.name) ? 'text/markdown' : /\.csv$/i.test(file.name) ? 'text/csv' : '');
+
+/** Uploads an evidence document to private storage and returns the reference to record with it. */
+export async function uploadEvidenceFile(projectId: string, file: File): Promise<{ path: string; name: string; size: number; mime: string }> {
+  const mime = guessMime(file);
+  if (!(EVIDENCE_TYPES as readonly string[]).includes(mime)) throw new ApiError('Evidence files can be PDF, Word, Excel, PowerPoint, PNG, JPEG, CSV, Markdown or text', 422);
+  if (file.size > ATTACHMENT_MAX_BYTES) throw new ApiError('Files must be 10 MB or smaller', 422);
+  const signed = await request<{ path: string; signedUrl: string }>('/api/attachments/sign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'evidence', projectId, name: file.name, size: file.size, mime }),
+  });
+  const put = await fetch(signed.signedUrl, { method: 'PUT', headers: { 'Content-Type': mime, 'x-upsert': 'false' }, body: file });
+  if (!put.ok) throw new ApiError(`Upload failed (${put.status})`, put.status);
+  return { path: signed.path, name: file.name, size: file.size, mime };
+}
+
+export const evidenceUrl = (evidenceId: string) => `/api/evidence/${encodeURIComponent(evidenceId)}`;

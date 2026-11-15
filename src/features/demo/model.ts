@@ -17,7 +17,7 @@ export type WorkItem = { id: string; key: string; title: string; description: st
 export type Member = { id: string; name: string; initials: string; role: Role; title: string };
 export type Sprint = { id: string; name: string; goal: string; state: SprintState; start: string; end: string; pointCapacity: number; hourCapacity: number; originalItemIds: string[]; frozenPoints: Record<string, number>; completedAt?: string; result?: { delivered: number; originalDelivered: number; commitment: number; cutoff: string } };
 export type Event = { id: string; sequence: number; at: string; sprintId: string; itemId: string; kind: 'scope-add' | 'scope-remove' | 'status'; status?: Status; points?: number; actor: string };
-export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string };
+export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string; /** Live only: attached document. */ file?: { name: string; size: number; mime: string } };
 export type Project = { id: string; name: string; code: string; description: string; timezone: string; wip: Record<Status, number>; members: Member[]; items: WorkItem[]; sprints: Sprint[]; events: Event[]; evidence: Evidence[];
   /** Live mode only (absent in demo data). invitations are visible to Product Owner / Scrum Master only. */
   ownerId?: string; archived?: boolean; invitations?: Invitation[]; activity?: Activity[]; storage?: { used: number; budget: number } };
