@@ -659,3 +659,10 @@ $$;
 
 REVOKE ALL ON FUNCTION public.is_member(UUID, UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.is_member(UUID, UUID) TO authenticated;
+
+-- Liveness probe for /api/health: proves the API can reach Postgres
+-- without exposing any table to anonymous callers.
+CREATE OR REPLACE FUNCTION public.health()
+RETURNS BOOLEAN LANGUAGE sql STABLE SET search_path = '' AS $$ SELECT true $$;
+REVOKE ALL ON FUNCTION public.health() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.health() TO anon, authenticated;
