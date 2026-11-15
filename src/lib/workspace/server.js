@@ -62,7 +62,7 @@ export async function loadWorkspace(supabase, user) {
 
   const sprintIds = sprints.map(s => s.id);
   const pickSprints = (query) => (sprintIds.length ? query : Promise.resolve(empty));
-  const [commitments, scope, invitations, comments, attachments, activity, evidence, notifications, inbox] = await Promise.all([
+  const [commitments, scope, invitations, comments, attachments, activity, evidence, notifications, inbox, joinCodes] = await Promise.all([
     must(pickSprints(supabase.from('sprint_commitments').select('sprint_id, work_item_id, frozen_estimate').in('sprint_id', sprintIds))),
     must(pickSprints(supabase.from('sprint_scope_events').select('id, sprint_id, work_item_id, action, estimate_at_event, actor_id, created_at, seq').in('sprint_id', sprintIds).order('seq'))),
     // RLS returns rows only for projects where the user is a manager (or the invitee).
@@ -73,6 +73,8 @@ export async function loadWorkspace(supabase, user) {
     must(pick(supabase.from('project_evidence').select('id, project_id, title, version, kind, evidence_date, note, file_name, size_bytes, mime_type').in('project_id', projectIds).is('removed_at', null).order('evidence_date', { ascending: false }))),
     must(supabase.from('notifications').select('id, kind, project_id, work_item_id, text, created_at, read_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)),
     must(supabase.rpc('rpc_my_invitations')),
+    // RLS: only managers see their projects' codes.
+    must(pick(supabase.from('project_join_codes').select('id, project_id, code, role, created_by, created_at, expires_at, max_uses, uses, revoked_at').in('project_id', projectIds).order('created_at', { ascending: false }))),
   ]);
 
   const sprintProject = Object.fromEntries(sprints.map(s => [s.id, s.project_id]));
@@ -133,6 +135,11 @@ export async function loadWorkspace(supabase, user) {
           status: i.status === 'PENDING' && new Date(i.expires_at) <= new Date() ? 'expired' : String(i.status).toLowerCase(),
           expiresAt: toIso(i.expires_at),
           at: toIso(i.created_at),
+        })),
+        joinCodes: joinCodes.filter(c => c.project_id === p.id).map(c => ({
+          id: c.id, code: c.code, role: c.role, createdBy: c.created_by, at: toIso(c.created_at), expiresAt: toIso(c.expires_at),
+          maxUses: c.max_uses, uses: c.uses,
+          active: !c.revoked_at && new Date(c.expires_at) > new Date() && (c.max_uses == null || c.uses < c.max_uses),
         })),
         activity: activity.filter(a => a.project_id === p.id).map(a => ({
           id: a.id, itemId: a.work_item_id, kind: a.kind, actor: a.actor_id, at: toIso(a.created_at), detail: a.detail,
@@ -319,6 +326,12 @@ export function actionToRpc(action) {
       return { fn: 'rpc_add_attachment', args: { p_item_id: action.itemId, p_path: str(action.path) ?? '', p_name: str(action.name) ?? '', p_size: Number(action.size), p_mime: str(action.mime) ?? '' } };
     case 'remove-attachment':
       return { fn: 'rpc_remove_attachment', args: { p_attachment_id: action.attachmentId } };
+    case 'create-join-code':
+      return { fn: 'rpc_create_join_code', args: { p_project_id: action.projectId, p_role: action.role, p_days: Number(action.days ?? 7), p_max_uses: Number.isInteger(action.maxUses) ? action.maxUses : null } };
+    case 'revoke-join-code':
+      return { fn: 'rpc_revoke_join_code', args: { p_code_id: action.codeId } };
+    case 'join-with-code':
+      return { fn: 'rpc_join_with_code', args: { p_code: str(action.code) ?? '' } };
     case 'read-notifications':
       return { fn: 'rpc_mark_notifications_read', args: { p_ids: Array.isArray(action.ids) ? action.ids : null } };
     default:

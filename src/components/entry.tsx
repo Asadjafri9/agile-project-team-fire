@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowRight, BarChart3, ClipboardList, Columns3, Flame, LockKeyhole } from 'lucide-react';
 import { useDemo } from '@/features/demo/store';
+import { joinWithCode, takePendingJoinCode } from '@/features/demo/live';
 import { Button } from '@/components/ui/button';
 
 export function Entry() {
@@ -26,6 +27,18 @@ export function Entry() {
   const confirmOk = confirm.length > 0 && confirm === password;
   const canSignUp = usernameOk && displayName.trim().length > 0 && passwordOk && confirmOk;
 
+  // A join link visited while signed out is completed right after sign-in / sign-up.
+  const afterAuth = async () => {
+    const pending = takePendingJoinCode();
+    if (pending) {
+      try { const { data } = await joinWithCode(pending); window.location.assign(`/projects/${data.project_id}/overview`); return; }
+      catch (err) { setAuthError(err instanceof Error ? `Signed in, but the join link failed: ${err.message}` : 'Signed in, but the join link failed'); }
+    }
+    router.push('/projects');
+  };
+  const [joining, setJoining] = useState(false);
+  useEffect(() => { try { if (new URLSearchParams(window.location.search).has('join')) setJoining(true); } catch { /* ignore */ } }, []);
+
   const signIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending) return;
@@ -33,7 +46,7 @@ export function Entry() {
     setAuthError(null);
     try {
       await login(username, password);
-      router.push('/projects');
+      await afterAuth();
     } catch (error) {
       setAuthError(error instanceof Error && error.message ? error.message : 'Unable to sign in');
     } finally {
@@ -48,7 +61,7 @@ export function Entry() {
     setAuthError(null);
     try {
       await signup(normalized, displayName.trim(), password);
-      router.push('/projects');
+      await afterAuth();
     } catch (error) {
       setAuthError(error instanceof Error && error.message ? error.message : 'Unable to create the account');
     } finally {
@@ -63,6 +76,7 @@ export function Entry() {
     <div className="entry-content"><div className="entry-kicker">A clear place to move work forward</div><h1>From backlog to delivery,<br/>with the work in view.</h1><p>Plan a sprint, follow the board, and inspect the numbers behind every decision. Create an account to work with your team, or explore a sample workspace first.</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 24, marginBottom: 6 }}>
         <div className="panel auth-card" style={{ width: 360, maxWidth: '100%' }}>
+          {joining && <div className="callout" role="status" style={{ margin: 12 }}>You've been invited to a project. Sign in or create an account and you'll join it automatically.</div>}
           <div className="auth-tabs" role="group" aria-label="Account">
             <button type="button" className={tab === 'signin' ? 'active' : ''} aria-pressed={tab === 'signin'} onClick={() => switchTab('signin')}>Sign in</button>
             <button type="button" className={tab === 'signup' ? 'active' : ''} aria-pressed={tab === 'signup'} onClick={() => switchTab('signup')}>Create account</button>

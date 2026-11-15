@@ -127,3 +127,18 @@ export async function uploadEvidenceFile(projectId: string, file: File): Promise
 }
 
 export const evidenceUrl = (evidenceId: string) => `/api/evidence/${encodeURIComponent(evidenceId)}`;
+
+/** Joins a project with a shared code; returns the project to open. */
+export function joinWithCode(code: string): Promise<{ ok: true; data: { project_id: string; project_name: string; role?: string; already_member: boolean } }> {
+  return request('/api/actions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: { type: 'join-with-code', code } }),
+  });
+}
+
+const PENDING_JOIN = 'team-fire-pending-join';
+export const rememberJoinCode = (code: string) => { try { sessionStorage.setItem(PENDING_JOIN, code); } catch { /* storage unavailable */ } };
+export const takePendingJoinCode = (): string | null => {
+  try { const c = sessionStorage.getItem(PENDING_JOIN); sessionStorage.removeItem(PENDING_JOIN); return c; } catch { return null; }
+};

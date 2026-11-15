@@ -35,10 +35,13 @@ export type Action =
   | { type: 'delete-comment'; projectId: string; itemId: string; commentId: string }
   | { type: 'add-attachment'; projectId: string; itemId: string; path: string; name: string; size: number; mime: string }
   | { type: 'remove-attachment'; projectId: string; itemId: string; attachmentId: string }
+  | { type: 'create-join-code'; projectId: string; role: Role; days: number; maxUses?: number | null }
+  | { type: 'revoke-join-code'; projectId: string; codeId: string }
+  | { type: 'join-with-code'; code: string }
   | { type: 'read-notifications'; ids?: string[] };
 
 /** Actions that only exist against the live backend. */
-export const LIVE_ONLY_ACTIONS = new Set<Action['type']>(['invite', 'respond-invite', 'revoke-invite', 'set-role', 'remove-member', 'leave', 'transfer-owner', 'archive-project', 'archive-item', 'set-wip', 'set-checklist', 'add-evidence', 'remove-evidence', 'comment', 'edit-comment', 'delete-comment', 'add-attachment', 'remove-attachment', 'read-notifications']);
+export const LIVE_ONLY_ACTIONS = new Set<Action['type']>(['invite', 'respond-invite', 'revoke-invite', 'set-role', 'remove-member', 'leave', 'transfer-owner', 'archive-project', 'archive-item', 'set-wip', 'set-checklist', 'add-evidence', 'remove-evidence', 'comment', 'edit-comment', 'delete-comment', 'add-attachment', 'remove-attachment', 'read-notifications', 'create-join-code', 'revoke-join-code', 'join-with-code']);
 
 /** Mirrors requirements.md §3. The database enforces the same rules; this only hides controls. */
 export type Capability = 'create' | 'prioritize' | 'plan' | 'move' | 'complete' | 'team' | 'archive' | 'wip' | 'evidence' | 'comment' | 'attach';

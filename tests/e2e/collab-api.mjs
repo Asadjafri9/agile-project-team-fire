@@ -120,6 +120,30 @@ check((await casey.act({ type: 'respond-invite', invitationId: inv2.id, accept: 
 check(!(await casey.ws()).inbox.some(i => i.id === inv2.id), 'revoked invitation leaves the inbox');
 check(p.invitations !== undefined && (await dev.ws()).state.projects.find(x => x.id === pid).invitations.length === 0, 'developers cannot see the invitation list (RLS)');
 
+// ---- Join codes / invite links ------------------------------------------------
+{
+  check((await dev.act({ type: 'create-join-code', projectId: pid, role: 'Developer', days: 7 })).status === 403, 'developer cannot create invite links (403)');
+  check((await sm.act({ type: 'create-join-code', projectId: pid, role: 'Product Owner', days: 7 })).status === 422, 'invite links never grant Product Owner (422)');
+  r = await sm.act({ type: 'create-join-code', projectId: pid, role: 'Developer', days: 7, maxUses: 1 });
+  check(r.status === 200 && /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(r.json?.data?.code ?? ''), 'scrum master creates a one-use invite code', r.json?.data?.code);
+  const jc = r.json?.data;
+  check(!(await dev.ws()).state.projects.find(x => x.id === pid).joinCodes?.length, 'developers cannot see invite codes (RLS)');
+  const typed = jc.code.replace('-', '').toLowerCase();
+  r = await casey.act({ type: 'join-with-code', code: `  ${typed} ` });
+  check(r.status === 200 && r.json?.data?.already_member === false, 'casey joins with the code (case/format tolerant)', S(r));
+  check((await casey.ws()).roles[pid] === 'Developer', 'joined with the role the code grants');
+  check((await casey.act({ type: 'join-with-code', code: jc.code })).json?.data?.already_member === true, 'joining again is a harmless no-op');
+  await sm.act({ type: 'remove-member', projectId: pid, userId: (await casey.ws()).user.id });
+  check((await casey.act({ type: 'join-with-code', code: jc.code })).status === 404, 'a used-up code is refused (404)');
+  r = await sm.act({ type: 'create-join-code', projectId: pid, role: 'Viewer', days: 1 });
+  const jc2 = r.json?.data;
+  check((await sm.act({ type: 'revoke-join-code', projectId: pid, codeId: jc2.id })).status === 200, 'scrum master revokes a code');
+  check((await casey.act({ type: 'join-with-code', code: jc2.code })).status === 404, 'a revoked code is refused (404)');
+  check(!fire(await casey.ws()), 'casey is not a member after the refused joins');
+  const anonJoin = await session()('/api/actions', { method: 'POST', body: { action: { type: 'join-with-code', code: jc2.code } } });
+  check(anonJoin.status === 401, 'signed-out visitors must sign in before joining (401)');
+}
+
 // ---- Priority is Product Owner only (§3) ----------------------------------
 const prio = backlogItem.priority;
 const other = prio === 'High' ? 'Low' : 'High';
@@ -254,6 +278,13 @@ if (DESTRUCTIVE) {
   check((await sm.act({ type: 'archive-project', projectId: sid })).status === 200, 'new owner archives the project');
   check((await sm.act({ type: 'create-item', projectId: sid, title: 'x', typeName: 'Bug', points: 1, priority: 'Low' })).status === 422, 'archived project is read-only (422)');
   check((await sm.ws()).state.projects.find(x => x.id === sid)?.archived === true, 'archived project stays readable');
+}
+
+// ---- Join code brute-force throttle (locks the assessor's joins for 15 minutes) ----
+if (process.argv.includes('--bruteforce')) {
+  let last;
+  for (let i = 0; i < 11; i++) last = await viewer.act({ type: 'join-with-code', code: `ZZZZ-ZZ${String(i).padStart(2, '2').replace(/[01]/g, '2')}` });
+  check(last.status === 422 && /Too many/.test(last.json?.error ?? ''), 'repeated wrong codes are throttled (422)', last.json?.error);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL COLLABORATION CHECKS PASSED');
