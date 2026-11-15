@@ -28,6 +28,8 @@ export async function middleware(request) {
   return response;
 }
 
+// API routes validate and refresh the session themselves, so the middleware
+// skips them to avoid a second round trip to Supabase Auth per request.
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js)$).*)'],
+  matcher: ['/((?!api/|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js)$).*)'],
 };

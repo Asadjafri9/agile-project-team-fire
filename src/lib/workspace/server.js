@@ -35,16 +35,16 @@ async function must(promise) {
 
 /** Build the full workspace snapshot visible to the signed-in user. */
 export async function loadWorkspace(supabase, user) {
-  const [profile] = await must(supabase.from('profiles').select('id, username, display_name, disabled_at').eq('id', user.id));
+  const [[profile], memberships] = await Promise.all([
+    must(supabase.from('profiles').select('id, username, display_name, disabled_at').eq('id', user.id)),
+    must(supabase.from('project_members').select('project_id, role').eq('user_id', user.id).is('removed_at', null)),
+  ]);
   if (profile?.disabled_at) {
     const err = new Error('Account disabled');
     err.code = '28000';
     throw err;
   }
 
-  const memberships = await must(
-    supabase.from('project_members').select('project_id, role').eq('user_id', user.id).is('removed_at', null),
-  );
   const projectIds = memberships.map(m => m.project_id);
   const roles = Object.fromEntries(memberships.map(m => [m.project_id, m.role]));
 

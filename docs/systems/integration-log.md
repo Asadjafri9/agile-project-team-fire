@@ -34,6 +34,11 @@ One entry per merge into `agentic-integration` and per promotion to `testing` or
 - Not delivered (routes answer `501`): invitations (PROJ-02), member role changes/removal (PROJ-03), project and item archiving (PROJ-05, ITEM-01 archive), attachments (REL-02), PDF export (REL-01; CSV export exists), evidence index persistence.
 - Known limitation: mid-sprint scope changes made from the planning view record the reason "Changed during sprint planning"; the UI does not yet prompt for a reason (SPR-05).
 - Deployment: Vercel project `team-fire-agile` (team `net-naut`) → https://team-fire-agile.vercel.app.
+- Hosted Supabase (`agile-fire`, ap-northeast-2, Postgres 17): 4 migrations applied via `scripts/apply-hosted.mjs`, demo seed loaded, public signup disabled, 0 public tables without RLS.
+- Pre-existing hosted fault fixed: the Data API had no exposed schemas (`db_schema` empty), so PostgREST was unhealthy and every REST call returned `PGRST002`. Restored to `public,graphql_public`.
+- Performance: functions pinned to `icn1` (same region as the database) and the middleware no longer re-validates API requests; `GET /api/workspace` went from ~2.7 s to ~0.4–0.8 s.
+- Production verification: 35/35 auth + RBAC checks (`tests/e2e/rbac-api.mjs`); direct calls with the publishable key are refused for every table and RPC, and signup returns `signup_disabled`; browser run clean.
+- Supabase security advisor: 12 `authenticated_security_definer_function_executable` warnings are by design (RPCs are the only write path and check identity, role and project internally); `auth_leaked_password_protection` needs a paid plan.
 
 ### 2026-10-21 — Governance bootstrap
 - Created `systems`, `agentic-integration`, `testing`, `backend` from the governance bootstrap commit.
