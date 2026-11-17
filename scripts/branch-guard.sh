@@ -53,7 +53,11 @@ owner_of() {
       echo shared ;;
     docs/design/*|dashboard-mockup/*|public/*|src/app/*|src/components/*|src/features/*|src/styles/*|tailwind.config.*|postcss.config.*|components.json)
       echo frontend ;;
-    AGENTS.md|CLAUDE.md|GEMINI.md|*.md|*.pdf|docs/*|.github/*|scripts/*|.agents/*|tsconfig*.json|next.config.*|eslint.config.*|.eslintrc*|vitest.config.*|playwright.config.*|.nvmrc|.gitignore|.env.example|vercel.json)
+    memory-bank/project.yaml|memory-bank/standards/*)
+      echo systems ;;
+    memory-bank/*)
+      echo process ;;
+    AGENTS.md|CLAUDE.md|GEMINI.md|*.md|*.pdf|docs/*|.github/*|.claude/*|.codex/*|.specsmd/*|scripts/*|.agents/*|tsconfig*.json|next.config.*|eslint.config.*|.eslintrc*|vitest.config.*|playwright.config.*|.nvmrc|.gitignore|.env.example|vercel.json)
       echo systems ;;
     *)
       echo unowned ;;
@@ -69,6 +73,7 @@ if [[ -n "$role" ]]; then
     if [[ "$f" == .agents/reports/* ]]; then continue; fi
     case "$owner" in
       "$role") ;;
+      process) ;;
       shared)
         if [[ "$role" == frontend || "$role" == backend ]]; then
           warn "$f is shared — list the change under 'Dependencies changed' in the PR description."

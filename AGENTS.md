@@ -56,7 +56,7 @@ Full detail, sync rules and diagrams: [`docs/systems/branching.md`](docs/systems
 
 ### 2.3 Ownership — stay in your lane
 
-Every path has exactly one owning department (section 7). **You may edit only paths your role owns.** If you need a change in someone else's path, open an issue (section 3) and continue with what you can do. The `branch-guard` check fails any task-branch PR that touches another department's files.
+Every path has an owner assignment (section 7). **You may edit only paths your role owns or paths explicitly shared with your role.** If you need a change in someone else's path, open an issue (section 3) and continue with what you can do. The `branch-guard` check fails any task-branch PR that touches another department's files.
 
 ### 2.4 Secrets and safety
 
@@ -234,8 +234,10 @@ This map is enforced by `scripts/branch-guard.sh` and mirrored in `.github/CODEO
 | `supabase/**`, `src/app/api/**`, `src/lib/**`, `src/middleware.ts`, `src/features/*/server/**`, `src/features/*/api/**`, `docs/api/**` | **Backend** |
 | `tests/e2e/**` | **Integration** |
 | `package.json`, `pnpm-lock.yaml` | **Shared** (Frontend and Backend may edit; Systems reviews) |
+| `memory-bank/project.yaml`, `memory-bank/standards/**` | **Systems** (project-wide AI-DLC configuration and standards) |
+| `memory-bank/**` (except `project.yaml` and `standards/**`) | **Process artifacts** (any task branch may edit; the owning department still controls its application paths) |
 | `docs/design/**`, `dashboard-mockup/**`, `public/**`, `src/app/**` (except `api/`), `src/components/**`, `src/features/**` (except `server/` and `api/`), `src/styles/**`, `tailwind.config.*`, `postcss.config.*`, `components.json` | **Frontend** |
-| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, root `*.md` and `*.pdf`, `docs/**` (other than above), `.github/**`, `scripts/**`, `.agents/**`, config files (`tsconfig*.json`, `next.config.*`, `eslint.config.*`, `vitest.config.*`, `playwright.config.*`, `.nvmrc`, `.gitignore`, `.env.example`, `vercel.json`) | **Systems** (CI/CD shares `.github/workflows/**` and `scripts/**`) |
+| `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, root `*.md` and `*.pdf`, `docs/**` (other than above), `.github/**`, `.claude/**`, `.codex/**`, `.specsmd/**`, `scripts/**`, `.agents/**`, config files (`tsconfig*.json`, `next.config.*`, `eslint.config.*`, `vitest.config.*`, `playwright.config.*`, `.nvmrc`, `.gitignore`, `.env.example`, `vercel.json`) | **Systems** (CI/CD shares `.github/workflows/**` and `scripts/**`) |
 
 A path that matches nothing is **unowned** — the guard fails and the Systems Architect assigns it.
 

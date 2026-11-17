@@ -19,3 +19,11 @@ Proposed stack: TypeScript, Next.js/React, Tailwind/shadcn, TanStack Query, dnd-
 Confirmed choices: private course/team audience, ID/password login, Product Owner and Scrum Master membership management, advisory WIP limits, and teammate updates within about five seconds. “ID” is provisionally interpreted as username; accounts are operator-provisioned without email dependencies.
 
 Implementation follows Sprint 0 and four delivery increments. See the requirements for the Definition of Ready/Done and the remaining product decisions before scheduling.
+
+## AI-DLC with specs.md
+
+The repository includes the [specs.md AI-DLC flow](https://github.com/fabriqaai/specs.md/blob/main/src/flows/aidlc/quick-start.md) for Codex, Claude Code, and GitHub Copilot. The installation manifest is in [.specsmd/manifest.yaml](.specsmd/manifest.yaml); project context starts at [memory-bank/project.yaml](memory-bank/project.yaml) and [memory-bank/standards/](memory-bank/standards/).
+
+Start the `specsmd-master-agent` skill or prompt in your coding tool. Use `specsmd-inception-agent` to create a new intent, then plan and execute bolts through the Construction agent. Do not create an intent for already completed work merely to populate the memory bank.
+
+The existing [agent rules](AGENTS.md), [requirements](requirements.md), [architecture](architecture.md), and [branching model](docs/systems/branching.md) remain authoritative. AI-DLC checkpoints do not bypass role ownership or human release gates. The installed specs.md v0.1.74 files contain local corrections for stale `.specsmd/skills/` references; check those references after a future reinstall.
