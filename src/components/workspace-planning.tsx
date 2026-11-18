@@ -10,8 +10,14 @@ type ReasonRequest = { item: WorkItem; sprintId: string | null; targetName: stri
 
 const addDays = (date: string, days: number) => {
   const value = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(value.getTime())) return date;
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
+};
+
+const isFullDate = (date: string) => {
+  const year = Number(date.split('-')[0]);
+  return Boolean(date) && year >= 1000 && !Number.isNaN(Date.parse(date));
 };
 
 export function Planning({ project, role, onItem }: { project: Project; role: Role; onItem: (id: string) => void }) {
@@ -142,12 +148,30 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
           <div className="planning-fields">
             <label>Sprint goal<input value={sprint.goal} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { goal: e.target.value } })}/></label>
             <div className="form-grid">
-              <label>Start date<input type="date" value={sprint.start} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { start: e.target.value } })}/></label>
-              <label>End date<input type="date" value={sprint.end} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { end: e.target.value } })}/></label>
+              <label>Start date<input type="date" value={sprint.start} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => {
+                const nextStart = e.target.value;
+                const patch: { start: string; end?: string } = { start: nextStart };
+                if (isFullDate(nextStart) && isFullDate(sprint.end) && Date.parse(sprint.end) <= Date.parse(nextStart)) {
+                  patch.end = addDays(nextStart, 1);
+                }
+                dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch });
+              }}/></label>
+              <label>End date<input type="date" min={sprint.start ? addDays(sprint.start, 1) : undefined} value={sprint.end} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => {
+                const nextEnd = e.target.value;
+                if (isFullDate(sprint.start) && isFullDate(nextEnd) && Date.parse(nextEnd) <= Date.parse(sprint.start)) {
+                  dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { end: addDays(sprint.start, 1) } });
+                  return;
+                }
+                dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { end: nextEnd } });
+              }} onBlur={() => {
+                if (sprint.start && (!sprint.end || !isFullDate(sprint.end) || Date.parse(sprint.end) <= Date.parse(sprint.start))) {
+                  dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { end: addDays(sprint.start, 1) } });
+                }
+              }}/></label>
             </div>
             <div className="form-grid">
-              <label>Story-point capacity<input type="number" min="0" value={sprint.pointCapacity} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { pointCapacity: Number(e.target.value) } })}/></label>
-              <label>Available hours<input type="number" min="0" value={sprint.hourCapacity} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { hourCapacity: Number(e.target.value) } })}/></label>
+              <label>Story-point capacity<input type="number" min="0" value={sprint.pointCapacity} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { pointCapacity: Math.max(0, Number(e.target.value) || 0) } })}/></label>
+              <label>Available hours<input type="number" min="0" value={sprint.hourCapacity} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { hourCapacity: Math.max(0, Number(e.target.value) || 0) } })}/></label>
             </div>
           </div>
         </section>
@@ -188,7 +212,7 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
             {inSprint.map(i => <div key={i.id} className="planning-item">
               <button className="planning-item-name" onClick={() => onItem(i.id)}><span className="item-key">{i.key}</span><strong>{i.title}</strong></button>
               <span>{i.points ?? '—'} pts</span>
-              <label className="hours-field"><span className="sr-only">Planned hours for {i.key}</span><input type="number" min="0" value={i.hours ?? ''} placeholder="hrs" disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'update-item', projectId: project.id, itemId: i.id, patch: { hours: e.target.value === '' ? null : Number(e.target.value) } })}/></label>
+              <label className="hours-field"><span className="sr-only">Planned hours for {i.key}</span><input type="number" min="0" value={i.hours ?? ''} placeholder="hrs" disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'update-item', projectId: project.id, itemId: i.id, patch: { hours: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) } })}/></label>
               {canPlan && sprint.state !== 'completed' && <button className="text-link" onClick={() => requestAllocate(i, null)}>Remove</button>}
             </div>)}
             {!inSprint.length && <div className="empty">No items allocated yet.</div>}
@@ -220,13 +244,28 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
         <label>Sprint name<input required value={newName} onChange={e => { setNewName(e.target.value); setNewError(''); }} placeholder={`Sprint ${String(project.sprints.length + 1).padStart(2, '0')}`}/></label>
         <label>Sprint goal<input value={newGoal} onChange={e => setNewGoal(e.target.value)} placeholder="What should this sprint achieve?"/></label>
         <div className="form-grid">
-          <label>Start date<input type="date" required value={newStart} onChange={e => { setNewStart(e.target.value); setNewError(''); }}/></label>
-          <label>End date<input type="date" required value={newEnd} aria-invalid={newDateError || undefined} aria-describedby={newDateError ? 'new-sprint-date-error' : undefined} onChange={e => { setNewEnd(e.target.value); setNewError(''); }}/></label>
+          <label>Start date<input type="date" required value={newStart} onChange={e => {
+            const nextStart = e.target.value;
+            setNewStart(nextStart);
+            if (isFullDate(nextStart) && isFullDate(newEnd) && Date.parse(newEnd) <= Date.parse(nextStart)) {
+              setNewEnd(addDays(nextStart, 1));
+            }
+            setNewError('');
+          }}/></label>
+          <label>End date<input type="date" required min={newStart ? addDays(newStart, 1) : undefined} value={newEnd} aria-invalid={newDateError || undefined} aria-describedby={newDateError ? 'new-sprint-date-error' : undefined} onChange={e => {
+            const nextEnd = e.target.value;
+            if (isFullDate(newStart) && isFullDate(nextEnd) && Date.parse(nextEnd) <= Date.parse(newStart)) {
+              setNewEnd(addDays(newStart, 1));
+            } else {
+              setNewEnd(nextEnd);
+            }
+            setNewError('');
+          }}/></label>
         </div>
         {newDateError && <p id="new-sprint-date-error" role="alert" className="form-error">End date must be after the start date.</p>}
         <div className="form-grid">
-          <label>Story-point capacity<input type="number" min="0" value={newPointCapacity} onChange={e => setNewPointCapacity(Number(e.target.value))}/></label>
-          <label>Available hours<input type="number" min="0" value={newHourCapacity} onChange={e => setNewHourCapacity(Number(e.target.value))}/></label>
+          <label>Story-point capacity<input type="number" min="0" value={newPointCapacity} onChange={e => setNewPointCapacity(Math.max(0, Number(e.target.value) || 0))}/></label>
+          <label>Available hours<input type="number" min="0" value={newHourCapacity} onChange={e => setNewHourCapacity(Math.max(0, Number(e.target.value) || 0))}/></label>
         </div>
         {newError && <p role="alert" className="form-error">{newError}</p>}
         <div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setNewOpen(false)}>Cancel</button><button className="button primary" type="submit">Create sprint</button></div>
