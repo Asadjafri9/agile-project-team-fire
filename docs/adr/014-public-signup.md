@@ -19,3 +19,10 @@ AUTH-03 disabled public signup and ADR-013 recorded "no public registration" as 
 - Anyone on the internet can create an account. Supabase Auth's built-in per-IP rate limits apply; there is no CAPTCHA. Accounts can be disabled by the operator (AUTH-02 enforcement is unchanged).
 - Lost passwords need the operator, because there is no email channel.
 - Tests: `tests/e2e/signup-api.mjs` (validation, duplicates, session, isolation, direct Auth bypass attempts).
+
+## Amendment (2026-11-15, same day): email accounts, invite links, evidence documents
+- **Sign up** now takes **email**, username, display name and password. The email is the Supabase Auth identity (no verification step yet; `mailer_autoconfirm` stays on). Username and display name travel as metadata and the account trigger validates them. Accounts created before this keep their internal `@accounts.team-fire.invalid` identity.
+- **Sign in** accepts email *or* username. Usernames are resolved to emails by `rpc_resolve_login`, which only answers when given a server-held key (`LOGIN_RESOLVER_KEY`, a sensitive Vercel environment variable; only its bcrypt hash is in the database, in the non-exposed `private` schema). Calling it with the public key is refused, so email addresses cannot be harvested.
+- **Invite links / join codes** (`project_join_codes`): managers create codes with a role (never Product Owner), expiry and optional use limit; anyone signed in can join; failed guesses are throttled per account.
+- **Evidence documents** are stored in the private bucket under `<project>/evidence/`.
+- Rotating the resolver key: generate a new value, store its bcrypt hash in `private.server_keys` (name `login_resolver`), update `LOGIN_RESOLVER_KEY` in Vercel, redeploy.

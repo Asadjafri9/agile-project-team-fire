@@ -10,6 +10,7 @@ export type Comment = { id: string; authorId: string; body: string; mentions: st
 export type Activity = { id: string; itemId: string; kind: string; actor: string; at: string; detail: string };
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
 export type Invitation = { id: string; projectId: string; projectName: string; username: string; name: string; role: Role; invitedBy: string; status: InvitationStatus; expiresAt: string; at: string };
+export type JoinCode = { id: string; code: string; role: Role; createdBy: string; at: string; expiresAt: string; maxUses: number | null; uses: number; active: boolean };
 export type Notification = { id: string; kind: 'mention' | 'invitation'; projectId: string | null; itemId: string | null; text: string; at: string; read: boolean };
 export type WorkItem = { id: string; key: string; title: string; description: string; type: ItemType; priority: Priority; points: number | null; hours: number | null; status: Status; assigneeId: string | null; epic: string; labels: string[]; wbs: string; sprintId: string | null; checklist: ChecklistEntry[]; order: number;
   /** Live mode only (absent in demo data). */
@@ -17,10 +18,10 @@ export type WorkItem = { id: string; key: string; title: string; description: st
 export type Member = { id: string; name: string; initials: string; role: Role; title: string };
 export type Sprint = { id: string; name: string; goal: string; state: SprintState; start: string; end: string; pointCapacity: number; hourCapacity: number; originalItemIds: string[]; frozenPoints: Record<string, number>; completedAt?: string; result?: { delivered: number; originalDelivered: number; commitment: number; cutoff: string } };
 export type Event = { id: string; sequence: number; at: string; sprintId: string; itemId: string; kind: 'scope-add' | 'scope-remove' | 'status'; status?: Status; points?: number; actor: string };
-export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string };
+export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string; /** Live only: attached document. */ file?: { name: string; size: number; mime: string } };
 export type Project = { id: string; name: string; code: string; description: string; timezone: string; wip: Record<Status, number>; members: Member[]; items: WorkItem[]; sprints: Sprint[]; events: Event[]; evidence: Evidence[];
   /** Live mode only (absent in demo data). invitations are visible to Product Owner / Scrum Master only. */
-  ownerId?: string; archived?: boolean; invitations?: Invitation[]; activity?: Activity[]; storage?: { used: number; budget: number } };
+  ownerId?: string; archived?: boolean; invitations?: Invitation[]; joinCodes?: JoinCode[]; activity?: Activity[]; storage?: { used: number; budget: number } };
 export type DemoState = { version: number; entered: boolean; role: Role; projects: Project[] };
 
 const members: Member[] = [

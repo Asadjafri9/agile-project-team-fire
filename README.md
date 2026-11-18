@@ -27,7 +27,7 @@ The demo password is shared with assessors outside Git (REL-05). **Explore demo*
 - **Security:** Supabase Auth with username sign-up and login (signups validated in the database, so the Auth API can't be used to bypass the rules); row-level security on every table; every write goes through a SQL function that checks identity, project membership and role (requirements §3); attachments are readable only by current members through short-lived signed links.
 - **Live updates:** teammates' changes appear within about 4 seconds; edits apply instantly and roll back with a message if the server refuses them.
 
-Anyone can **create an account** from the home page (username, display name, password; see [ADR-014](docs/adr/014-public-signup.md)). A new account starts in no project: create one to become its Product Owner, or ask a teammate to invite your username. Operators can still create, reset or disable accounts with `scripts/accounts.mjs`.
+Anyone can **create an account** from the home page with an email, username, display name and password, then sign in with either the email or the username (see [ADR-014](docs/adr/014-public-signup.md)). Managers can share **invite links or codes** from the Team page; anyone can paste a code under **Join a project**. A new account starts in no project: create one to become its Product Owner, or ask a teammate to invite your username. Operators can still create, reset or disable accounts with `scripts/accounts.mjs`.
 
 ## Run locally
 

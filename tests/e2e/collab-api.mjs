@@ -120,6 +120,30 @@ check((await casey.act({ type: 'respond-invite', invitationId: inv2.id, accept: 
 check(!(await casey.ws()).inbox.some(i => i.id === inv2.id), 'revoked invitation leaves the inbox');
 check(p.invitations !== undefined && (await dev.ws()).state.projects.find(x => x.id === pid).invitations.length === 0, 'developers cannot see the invitation list (RLS)');
 
+// ---- Join codes / invite links ------------------------------------------------
+{
+  check((await dev.act({ type: 'create-join-code', projectId: pid, role: 'Developer', days: 7 })).status === 403, 'developer cannot create invite links (403)');
+  check((await sm.act({ type: 'create-join-code', projectId: pid, role: 'Product Owner', days: 7 })).status === 422, 'invite links never grant Product Owner (422)');
+  r = await sm.act({ type: 'create-join-code', projectId: pid, role: 'Developer', days: 7, maxUses: 1 });
+  check(r.status === 200 && /^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(r.json?.data?.code ?? ''), 'scrum master creates a one-use invite code', r.json?.data?.code);
+  const jc = r.json?.data;
+  check(!(await dev.ws()).state.projects.find(x => x.id === pid).joinCodes?.length, 'developers cannot see invite codes (RLS)');
+  const typed = jc.code.replace('-', '').toLowerCase();
+  r = await casey.act({ type: 'join-with-code', code: `  ${typed} ` });
+  check(r.status === 200 && r.json?.data?.already_member === false, 'casey joins with the code (case/format tolerant)', S(r));
+  check((await casey.ws()).roles[pid] === 'Developer', 'joined with the role the code grants');
+  check((await casey.act({ type: 'join-with-code', code: jc.code })).json?.data?.already_member === true, 'joining again is a harmless no-op');
+  await sm.act({ type: 'remove-member', projectId: pid, userId: (await casey.ws()).user.id });
+  check((await casey.act({ type: 'join-with-code', code: jc.code })).status === 404, 'a used-up code is refused (404)');
+  r = await sm.act({ type: 'create-join-code', projectId: pid, role: 'Viewer', days: 1 });
+  const jc2 = r.json?.data;
+  check((await sm.act({ type: 'revoke-join-code', projectId: pid, codeId: jc2.id })).status === 200, 'scrum master revokes a code');
+  check((await casey.act({ type: 'join-with-code', code: jc2.code })).status === 404, 'a revoked code is refused (404)');
+  check(!fire(await casey.ws()), 'casey is not a member after the refused joins');
+  const anonJoin = await session()('/api/actions', { method: 'POST', body: { action: { type: 'join-with-code', code: jc2.code } } });
+  check(anonJoin.status === 401, 'signed-out visitors must sign in before joining (401)');
+}
+
 // ---- Priority is Product Owner only (§3) ----------------------------------
 const prio = backlogItem.priority;
 const other = prio === 'High' ? 'Low' : 'High';
@@ -214,6 +238,31 @@ if (!SKIP_STORAGE) {
   }
 }
 
+// ---- Evidence documents ------------------------------------------------------
+if (!SKIP_STORAGE) {
+  const signEv = (s, body) => s.call('/api/attachments/sign', { method: 'POST', body: { target: 'evidence', projectId: pid, ...body } });
+  const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  check((await signEv(viewer, { name: 'r.docx', size: 10, mime: DOCX })).status === 403, 'viewer cannot upload evidence documents (403)');
+  check((await signEv(dev, { name: 'x.exe', size: 10, mime: 'application/x-msdownload' })).status === 422, 'evidence rejects executables (422)');
+  const ev = await signEv(dev, { name: 'Sprint review.md', size: 20, mime: 'text/markdown' });
+  check(ev.status === 200 && ev.json?.path?.startsWith(`${pid}/evidence/`), 'developer gets an evidence upload URL', `HTTP ${ev.status}`);
+  if (ev.status === 200) {
+    const put = await fetch(ev.json.signedUrl, { method: 'PUT', headers: { 'content-type': 'text/markdown' }, body: '# Sprint review\nok\n' });
+    check(put.ok, 'evidence document uploads to private storage', `HTTP ${put.status}`);
+    r = await dev.act({ type: 'add-evidence', projectId: pid, evidence: { title: 'E2E review doc', version: 'v1', kind: 'Markdown', date: '2026-11-15', note: 'e2e' }, file: { path: ev.json.path, name: 'Sprint review.md', size: 20, mime: 'text/markdown' } });
+    check(r.status === 200, 'evidence recorded with its document', S(r));
+    const evRow = fire(await viewer.ws()).evidence.find(e => e.id === r.json?.data?.id);
+    check(evRow?.file?.name === 'Sprint review.md', 'evidence lists the document for members');
+    const dl = await viewer.call(`/api/evidence/${evRow?.id}`);
+    check(dl.status === 302, 'viewer downloads the evidence document via signed link');
+    const body = dl.status === 302 ? await (await fetch(dl.headers.get('location'))).text() : '';
+    check(body.startsWith('# Sprint review'), 'downloaded document has the uploaded content');
+    check((await casey.call(`/api/evidence/${evRow?.id}`)).status === 404, 'non-member cannot download evidence (404)');
+    check((await dev.act({ type: 'add-evidence', projectId: pid, evidence: { title: 'forged', version: 'v1', kind: 'PDF', date: '2026-11-15', note: '' }, file: { path: `${pid}/evidence/never-uploaded.pdf`, name: 'x.pdf', size: 5, mime: 'application/pdf' } })).status === 404, 'cannot record a document that was never uploaded (404)');
+    await dev.act({ type: 'remove-evidence', projectId: pid, evidenceId: evRow?.id });
+  }
+}
+
 // ---- Ownership transfer & project archive (PROJ-03, PROJ-05) ---------------
 if (DESTRUCTIVE) {
   r = await po.act({ type: 'create-project', name: 'E2E Scratch' });
@@ -229,6 +278,13 @@ if (DESTRUCTIVE) {
   check((await sm.act({ type: 'archive-project', projectId: sid })).status === 200, 'new owner archives the project');
   check((await sm.act({ type: 'create-item', projectId: sid, title: 'x', typeName: 'Bug', points: 1, priority: 'Low' })).status === 422, 'archived project is read-only (422)');
   check((await sm.ws()).state.projects.find(x => x.id === sid)?.archived === true, 'archived project stays readable');
+}
+
+// ---- Join code brute-force throttle (locks the assessor's joins for 15 minutes) ----
+if (process.argv.includes('--bruteforce')) {
+  let last;
+  for (let i = 0; i < 11; i++) last = await viewer.act({ type: 'join-with-code', code: `ZZZZ-ZZ${String(i).padStart(2, '2').replace(/[01]/g, '2')}` });
+  check(last.status === 422 && /Too many/.test(last.json?.error ?? ''), 'repeated wrong codes are throttled (422)', last.json?.error);
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nALL COLLABORATION CHECKS PASSED');

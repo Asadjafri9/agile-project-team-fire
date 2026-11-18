@@ -15,6 +15,8 @@ export default async function handler(req, res) {
     const { fn, args } = actionToRpc(req.body?.action);
     const { data, error } = await supabase.rpc(fn, args);
     if (error) throw error;
+    // RPCs that must persist a side effect on refusal (e.g. join-code throttling) return { invalid: true }.
+    if (data && typeof data === 'object' && data.invalid === true) return res.status(404).json({ error: data.message || 'Not found', code: 'P0002' });
     return res.status(200).json({ ok: true, data });
   } catch (error) {
     const { status, body } = httpError(error);

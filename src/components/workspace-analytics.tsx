@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -14,7 +15,8 @@ export function Analytics({ project }: { project: Project }) {
   const [selected, setSelected] = useState(project.sprints.find(s => s.state === 'active')?.id ?? project.sprints.at(-1)?.id ?? '');
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
-  const sprint = project.sprints.find(s => s.id === selected);
+  // Never trust a stale/foreign selection: fall back to the active, then the latest sprint.
+  const sprint = project.sprints.find(s => s.id === selected) ?? project.sprints.find(s => s.state === 'active') ?? project.sprints.at(-1);
   const today = localDate(new Date().toISOString(), project.timezone);
   const rows = useMemo(() => sprint ? series(sprint, project.events, today, project.timezone) : [], [sprint, project.events, today, project.timezone]);
   const summary = useMemo(() => sprint ? sprintSummary(project, sprint) : null, [project, sprint]);
@@ -45,7 +47,7 @@ export function Analytics({ project }: { project: Project }) {
   return <>
     <div className="page-heading">
       <div><div className="eyebrow">DELIVERY INSIGHTS</div><h1>Analytics</h1><p>Metrics replay sprint events and frozen commitment data.</p></div>
-      <label className="sprint-picker">Sprint <select value={selected} onChange={e => setSelected(e.target.value)}>{project.sprints.map(s => <option key={s.id} value={s.id}>{s.name} · {s.state}</option>)}</select></label>
+      {project.sprints.length > 0 ? <label className="sprint-picker">Sprint <select value={sprint?.id ?? ''} onChange={e => setSelected(e.target.value)}>{project.sprints.map(s => <option key={s.id} value={s.id}>{s.name} · {s.state}</option>)}</select></label> : <span className="sprint-picker" role="status">No sprints to show yet</span>}
     </div>
     {sprint ? <>
       <div className="analytics-context">
@@ -74,7 +76,7 @@ export function Analytics({ project }: { project: Project }) {
             <button className="button secondary" onClick={() => window.print()} disabled={!exportReady} title="Opens the print dialog. Choose Save as PDF."><Printer size={16}/> Download PDF</button>
             <small className="export-hint">Choose “Save as PDF” in the print dialog.</small>
           </div>
-          {!exportReady && <p className="export-hint">Start the sprint and record events to enable exports.</p>}
+          {!exportReady && <p className="export-hint">{sprint?.state === 'planned' ? `${sprint.name} has not started yet. CSV and PDF summaries become available once it starts.` : 'Exports become available once this sprint has recorded activity.'}</p>}
         </div>
       </section>
 
@@ -157,6 +159,6 @@ export function Analytics({ project }: { project: Project }) {
         </table>
         <p className="print-note">Items removed during the sprint keep their last recorded status. Generated from sprint events at the data cutoff.</p>
       </section>, document.body)}
-    </> : <div className="empty panel"><BarChart3 size={22}/><h2>No sprint data</h2><p>Create and start a sprint to inspect delivery metrics.</p></div>}
+    </> : <div className="empty panel"><BarChart3 size={22}/><h2>{project.sprints.length ? 'No sprint data yet' : 'No sprints to show'}</h2><p>{project.sprints.length ? 'Start the sprint to begin recording burndown, velocity and flow.' : 'Create a sprint in Sprint planning, allocate work and start it; analytics fill in from there.'}</p><Link className="button secondary" href={`/projects/${project.id}/planning`}>Go to Sprint planning</Link></div>}
   </>;
 }

@@ -28,17 +28,20 @@ export type Action =
   | { type: 'archive-item'; projectId: string; itemId: string; reason: string }
   | { type: 'set-wip'; projectId: string; limits: Partial<Record<Status, number | null>> }
   | { type: 'set-checklist'; projectId: string; itemId: string; checklist: ChecklistEntry[] }
-  | { type: 'add-evidence'; projectId: string; evidence: Omit<Evidence, 'id'> }
+  | { type: 'add-evidence'; projectId: string; evidence: Omit<Evidence, 'id' | 'file'>; file?: { path: string; name: string; size: number; mime: string } }
   | { type: 'remove-evidence'; projectId: string; evidenceId: string }
   | { type: 'comment'; projectId: string; itemId: string; body: string; mentions: string[] }
   | { type: 'edit-comment'; projectId: string; itemId: string; commentId: string; body: string; mentions: string[] }
   | { type: 'delete-comment'; projectId: string; itemId: string; commentId: string }
   | { type: 'add-attachment'; projectId: string; itemId: string; path: string; name: string; size: number; mime: string }
   | { type: 'remove-attachment'; projectId: string; itemId: string; attachmentId: string }
+  | { type: 'create-join-code'; projectId: string; role: Role; days: number; maxUses?: number | null }
+  | { type: 'revoke-join-code'; projectId: string; codeId: string }
+  | { type: 'join-with-code'; code: string }
   | { type: 'read-notifications'; ids?: string[] };
 
 /** Actions that only exist against the live backend. */
-export const LIVE_ONLY_ACTIONS = new Set<Action['type']>(['invite', 'respond-invite', 'revoke-invite', 'set-role', 'remove-member', 'leave', 'transfer-owner', 'archive-project', 'archive-item', 'set-wip', 'set-checklist', 'add-evidence', 'remove-evidence', 'comment', 'edit-comment', 'delete-comment', 'add-attachment', 'remove-attachment', 'read-notifications']);
+export const LIVE_ONLY_ACTIONS = new Set<Action['type']>(['invite', 'respond-invite', 'revoke-invite', 'set-role', 'remove-member', 'leave', 'transfer-owner', 'archive-project', 'archive-item', 'set-wip', 'set-checklist', 'add-evidence', 'remove-evidence', 'comment', 'edit-comment', 'delete-comment', 'add-attachment', 'remove-attachment', 'read-notifications', 'create-join-code', 'revoke-join-code', 'join-with-code']);
 
 /** Mirrors requirements.md §3. The database enforces the same rules; this only hides controls. */
 export type Capability = 'create' | 'prioritize' | 'plan' | 'move' | 'complete' | 'team' | 'archive' | 'wip' | 'evidence' | 'comment' | 'attach';
@@ -147,7 +150,7 @@ type DemoContextValue = {
   user: LiveUser | null;
   login: (username: string, password: string) => Promise<void>;
   /** Creates an account (ADR-014) and signs it in. */
-  signup: (username: string, displayName: string, password: string) => Promise<void>;
+  signup: (email: string, username: string, displayName: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   enterDemo: () => void;
   error: string | null;
@@ -348,13 +351,13 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
     }
   }, [applyWorkspace]);
 
-  const signup = useCallback(async (username: string, displayName: string, password: string) => {
+  const signup = useCallback(async (email: string, username: string, displayName: string, password: string) => {
     setError(null);
     setSyncing(true);
     try {
-      const created = await signupRequest(username, displayName, password);
+      const created = await signupRequest(email, username, displayName, password);
       // If the backend did not start a session (e.g. confirmation required), sign in explicitly.
-      if (!created.user) await loginRequest(username, password);
+      if (!created.user) await loginRequest(email, password);
       const payload = await getWorkspace();
       modeRef.current = 'live';
       setMode('live');

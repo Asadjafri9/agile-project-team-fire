@@ -491,6 +491,7 @@ describe('loadWorkspace', () => {
       username: 'ada',
       name: 'Ada Lovelace',
       initials: 'AL',
+      email: null,
     });
     expect(workspace.roles).toEqual({ P1: 'Developer' });
     expect(workspace.revisions).toEqual({ P1: 7, _inbox: 0 });
