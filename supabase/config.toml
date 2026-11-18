@@ -1,0 +1,55 @@
+# A string ID used to uniquely identify the project.
+project_id = "team-fire-scrum"
+
+[api]
+enabled = true
+# Port to run the Data API / PostgREST on local environment
+port = 54321
+# Schemas to expose via the API
+schemas = ["public", "storage"]
+# Extra schemas to expose
+extra_search_path = ["public", "extensions"]
+# Max rows returned from a top-level request
+max_rows = 1000
+
+[db]
+# Port to run PostgreSQL database on local environment
+port = 54322
+# Major version of PostgreSQL to use
+major_version = 15
+# Shadow database port for migration diffing
+shadow_port = 54320
+
+[db.pooler]
+enabled = false
+port = 54229
+
+[auth]
+enabled = true
+# Port for the Auth service
+port = 54324
+# Set public self-registration to false per AUTH-03 requirement
+enable_signup = false
+
+[auth.email]
+# Disable email confirmations since custom internal username identities are used
+enable_confirmations = false
+# NOTE: GoTrue treats this as "email provider enabled", not "public signup".
+# It must stay true or password logins fail with email_provider_disabled.
+enable_signup = true
+
+[auth.sms]
+enable_signup = false
+
+[storage]
+enabled = true
+# File size limit in bytes (10MB maximum for attachments per REL-02 requirement)
+file_size_limit = "10MiB"
+
+[storage.buckets.project_attachments]
+public = false
+file_size_limit = "10MiB"
+allowed_mime_types = ["application/pdf", "image/png", "image/jpeg", "text/plain"]
+
+[analytics]
+enabled = false

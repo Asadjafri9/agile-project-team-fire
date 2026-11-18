@@ -1,6 +1,6 @@
 # Agile Project — Team Fire: system architecture
 
-Status: proposed implementation design, aligned with the team's decisions on 2026-10-21; §6 is simplified by [ADR-012](docs/adr/012-concurrency-scope-trim.md) and agent workflow is governed by [AGENTS.md](AGENTS.md). Read [requirements.md](requirements.md) for scope and business rules and [deployment.md](deployment.md) for rollout. The repository currently contains documentation and the source PDF, not an implemented application.
+Status: proposed connected-application design, aligned with the team's decisions on 2026-10-21; §6 is simplified by [ADR-012](docs/adr/012-concurrency-scope-trim.md) and agent workflow is governed by [AGENTS.md](AGENTS.md). Read [requirements.md](requirements.md) for scope and business rules and [deployment.md](deployment.md) for rollout. The repository also contains a browser-local sample-data frontend prototype; the connected application described here has not been implemented.
 
 ## 1. Recommended stack
 
