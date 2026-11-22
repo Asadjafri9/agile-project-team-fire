@@ -25,6 +25,32 @@ Returns everything the signed-in user may see, in the `DemoState` shape from `sr
 
 `events` are replayed from `sprint_scope_events` and `work_item_status_history` (MET-01). The UI polls this every 4 s and replaces state when a `revisions` value changes (BOARD-04).
 
+## Recorded sprint timing (Bolt 002 / FR-3)
+
+Each sprint adds `startedAt: string | null` and `timezone: string | null`.
+`startedAt` normalizes persisted `sprints.started_at` to a UTC ISO instant. Missing
+values remain null, including legacy active/completed rows. Planned start/end dates
+and completed-result cutoffs retain their existing meaning. No start is inferred
+from planned dates or work-item history.
+
+`timezone` maps `sprints.timezone_snapshot`. Capture the project IANA timezone when
+the start RPC acquires the project/sprint locks and commits the actual start.
+Planned rows have no snapshot. Later project timezone changes do not change the
+snapshot, and the database rejects attempts to rewrite a recorded snapshot.
+Existing started/completed rows are backfilled with their project timezone at
+migration time. This is an explicit approximation because earlier timezone history
+cannot be recovered. Missing `started_at` values remain missing after backfill.
+The mapper tolerates an unapplied migration by returning null for the new field.
+
+The start RPC rejects starts at or after the planned end's local-date boundary,
+retaining goal, date range, estimates, membership, role, version and one-active-sprint
+checks. SQL remains authoritative. Bolt 003 will consume these additive fields in
+the frontend, charts, tables and exports. This bolt does not change the frontend model.
+
+The timezone decision is proposed for Systems review and an architecture decision
+record before promotion. The migration is supplied for local review only.
+Applying it to any hosted database requires a separately authorized deployment.
+
 ## Write: `POST /api/actions`
 
 Body `{ action }`, where `action` is one member of the `Action` union in `src/features/demo/store.tsx`.

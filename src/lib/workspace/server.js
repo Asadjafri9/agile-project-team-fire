@@ -186,6 +186,8 @@ export async function loadWorkspace(supabase, user) {
             state: String(s.status).toLowerCase(),
             start: s.start_date,
             end: s.end_date,
+            startedAt: toIso(s.started_at) ?? null,
+            timezone: s.timezone_snapshot ?? null,
             pointCapacity: s.capacity_points ?? 0,
             hourCapacity: s.hour_capacity ?? 0,
             originalItemIds: frozen.map(c => c.work_item_id),

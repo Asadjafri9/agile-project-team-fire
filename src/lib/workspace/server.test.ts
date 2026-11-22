@@ -483,6 +483,31 @@ const baseFixtures = (): Fixtures => ({
 });
 
 describe('loadWorkspace', () => {
+  it.each(['ACTIVE', 'COMPLETED'])('maps recorded timing for a %s sprint without changing planned dates', async status => {
+    const fixtures = baseFixtures();
+    fixtures.sprints = [{
+      ...fixtures.sprints[1],
+      status,
+      started_at: '2026-10-04T00:30:00+05:00',
+      timezone_snapshot: 'Asia/Karachi',
+    }];
+    fixtures.projects[0].timezone = 'America/New_York';
+    const workspace = await loadWorkspace(makeSupabase(fixtures), { id: 'u1' });
+    expect(workspace.state.projects[0].sprints[0]).toMatchObject({
+      startedAt: '2026-10-03T19:30:00.000Z',
+      timezone: 'Asia/Karachi',
+      start: '2026-10-02',
+      end: '2026-10-15',
+    });
+  });
+
+  it.each(['PLANNED', 'ACTIVE', 'COMPLETED'])('does not invent timing for a legacy %s sprint', async status => {
+    const fixtures = baseFixtures();
+    fixtures.sprints = [{ ...fixtures.sprints[1], status, started_at: null }];
+    const workspace = await loadWorkspace(makeSupabase(fixtures), { id: 'u1' });
+    expect(workspace.state.projects[0].sprints[0]).toMatchObject({ startedAt: null, timezone: null });
+  });
+
   it('builds the full workspace snapshot for a member', async () => {
     const workspace = await loadWorkspace(makeSupabase(baseFixtures()), { id: 'u1' });
 
@@ -561,6 +586,8 @@ describe('loadWorkspace', () => {
       state: 'active',
       start: '2026-10-02',
       end: '2026-10-15',
+      startedAt: null,
+      timezone: null,
       pointCapacity: 10,
       hourCapacity: 40,
       originalItemIds: ['W1'],

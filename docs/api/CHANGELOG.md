@@ -4,6 +4,7 @@ Backend-owned. Every breaking change to a route, response shape, Zod schema, err
 
 | Date | Change | Breaking? | Issue | Frontend action |
 | --- | --- | --- | --- | --- |
+| 2026-11-22 | Bolt 002 / FR-3 adds sprint startedAt and timezone to workspace JSON, freezes timezone at start and rejects starts at or after the local end-date boundary. | No (additive fields; stricter start guard) | Bolt 002 | Bolt 003 consumes the recorded timing; handle legacy nulls. |
 | 2026-11-15 | Added `GET /api/workspace` (DemoState snapshot) and `POST /api/actions` (one UI action → one RPC). See `docs/api/workspace.md`. | No (additive) | — | Live mode uses these |
 | 2026-11-15 | RPC signatures changed: `rpc_create_project` no longer takes `p_owner_id`; `rpc_create_work_item` drops description/sprint params; `rpc_move_work_item` drops `p_new_position`. Legacy routes updated. | Yes | — | None (UI uses `/api/actions`) |
 | 2026-11-15 | `POST /api/auth/login` returns `{ user }` only; tokens travel in cookies. | Yes | — | None |
