@@ -1,5 +1,5 @@
 import type { Role, Sprint, SprintState } from '../model';
-import { ProjectCalendar, isValidSprintRange } from './ProjectCalendar';
+import { ProjectCalendar, isValidLocalDate, isValidSprintRange } from './ProjectCalendar';
 
 export type SprintAction =
   | 'edit-plan'
@@ -69,6 +69,34 @@ export abstract class SprintDomain {
     return isValidSprintRange(this.dto.start, this.dto.end);
   }
 
+  /** The recorded start. Null for planned sprints and for legacy rows without one. */
+  get startedAt(): string | null {
+    return this.dto.startedAt ? new Date(this.dto.startedAt).toISOString() : null;
+  }
+
+  /** Planned end dates are exclusive: the sprint's time is up at local midnight (Bolt 002). */
+  plannedEnd(): string | null {
+    return isValidLocalDate(this.dto.end) ? this.calendar.startOfDay(this.dto.end) : null;
+  }
+
+  /** Requirements section 5.5. Null when it cannot be known without inventing a start. */
+  idealRemainingAt(instant: string): number | null {
+    const plannedEnd = this.plannedEnd();
+    if (!plannedEnd) return null;
+    const at = Date.parse(instant);
+    const end = Date.parse(plannedEnd);
+    if (at >= end) return 0;
+    if (!this.startedAt) return null;
+    const start = Date.parse(this.startedAt);
+    if (at < start) return null;
+    return Math.round(this.initialCommitment * (1 - (at - start) / (end - start)) * 10) / 10;
+  }
+
+  /** Preflight only; the database makes the final decision. */
+  canStartAt(_now: Date | string = new Date()): boolean {
+    return false;
+  }
+
   calendarDays(): string[] {
     return this.calendar.enumerateDays(this.dto.start, this.dto.end);
   }
@@ -106,6 +134,14 @@ export class PlannedSprint extends SprintDomain {
     return actions;
   }
 
+  override canStartAt(now: Date | string = new Date()): boolean {
+    return (
+      this.hasValidSchedule() &&
+      this.end > this.start &&
+      this.calendar.toLocalDate(now) < this.end
+    );
+  }
+
   timelineCutoff(): string | null {
     return null;
   }
@@ -133,13 +169,14 @@ export class ActiveSprint extends SprintDomain {
     if (Number.isNaN(date.getTime())) {
       throw new Error(`Invalid active sprint cutoff instant: "${String(now)}"`);
     }
-    return date.toISOString();
+    const iso = date.toISOString();
+    // A browser clock slightly behind the database must not precede the recorded start.
+    return this.startedAt && this.startedAt > iso ? this.startedAt : iso;
   }
 
-  isTodayPartial(now: Date | string = new Date()): boolean {
-    if (!this.hasValidSchedule()) return false;
-    const localToday = this.calendar.toLocalDate(now);
-    return localToday >= this.dto.start && localToday <= this.dto.end;
+  /** A running sprint's today is always incomplete, including early starts and overruns. */
+  isTodayPartial(): boolean {
+    return true;
   }
 }
 
@@ -156,12 +193,12 @@ export class CompletedSprint extends SprintDomain {
     return ['view-analytics', 'export-report'];
   }
 
-  timelineCutoff(): string {
+  timelineCutoff(): string | null {
     const frozen = this.dto.result?.cutoff ?? this.dto.completedAt;
     if (frozen) {
       return new Date(frozen).toISOString();
     }
-    return `${this.dto.end}T23:59:59.999Z`;
+    return isValidLocalDate(this.dto.end) ? this.calendar.endOfDay(this.dto.end) : null;
   }
 
   isTodayPartial(): boolean {
@@ -170,7 +207,8 @@ export class CompletedSprint extends SprintDomain {
 }
 
 export function createSprintDomain(dto: Sprint, timezone = 'Asia/Karachi'): SprintDomain {
-  const calendar = new ProjectCalendar(timezone);
+  // The zone frozen at start wins over the project's current setting.
+  const calendar = new ProjectCalendar(dto.timezone ?? timezone);
   switch (dto.state) {
     case 'planned':
       return new PlannedSprint(dto, calendar);
