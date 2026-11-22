@@ -3,7 +3,9 @@ import { type FormEvent, useState } from 'react';
 import { AlertCircle, ArrowRight, CalendarDays, CheckCircle2, CircleHelp, Plus } from 'lucide-react';
 import { allowed, useDemo } from '@/features/demo/store';
 import { Project, Role, WorkItem } from '@/features/demo/model';
-import { localDate } from '@/features/demo/metrics';
+import { createSprintDomain } from '@/features/demo/domain';
+import { localDate, sprintTimeline } from '@/features/demo/metrics';
+import { SprintSchedule } from './sprint-timeline';
 import { Modal, Pill } from './ui';
 
 type ReasonRequest = { item: WorkItem; sprintId: string | null; targetName: string };
@@ -47,10 +49,21 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
   const unresolved = inSprint.filter(i => i.status !== 'Done');
   const plannedSprints = project.sprints.filter(s => s.state === 'planned' && s.id !== sprint?.id);
 
+  const now = new Date();
+  const domain = sprint ? createSprintDomain(sprint, project.timezone) : null;
+  const timeline = sprint ? sprintTimeline(sprint, project.events, now, project.timezone) : null;
+  // Role checks stay with allowed(); the domain adds what the sprint's lifecycle permits.
+  const canEditPlan = Boolean(canPlan && domain?.canPerform(role, 'edit-plan'));
+  const canChangeScope = Boolean(canPlan && domain?.canPerform(role, 'allocate-items'));
+  const canComplete = Boolean(canPlan && domain?.canPerform(role, 'complete-sprint'));
+  const datesOrdered = Boolean(sprint?.start && sprint.end && Date.parse(sprint.end) > Date.parse(sprint.start));
+  const endReached = Boolean(sprint?.state === 'planned' && datesOrdered && !domain?.canStartAt(now));
+  const endReachedText = `The end date is today or has passed in ${project.timezone}. Update the dates.`;
   const startIssues: string[] = [];
   if (sprint?.state === 'planned') {
     if (!sprint.goal.trim()) startIssues.push('Add a sprint goal.');
     if (!sprint.start || !sprint.end || Date.parse(sprint.end) <= Date.parse(sprint.start)) startIssues.push('Set an end date after the start date.');
+    if (endReached) startIssues.push(endReachedText);
     if (!inSprint.length) startIssues.push('Allocate at least one work item.');
     const unestimated = inSprint.filter(i => i.points == null);
     if (unestimated.length) startIssues.push(`Estimate ${unestimated.map(i => i.key).join(', ')} before starting.`);
@@ -174,6 +187,7 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
               <label>Available hours<input type="number" min="0" value={sprint.hourCapacity} disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'sprint', projectId: project.id, sprintId: sprint.id, patch: { hourCapacity: Math.max(0, Number(e.target.value) || 0) } })}/></label>
             </div>
           </div>
+          {timeline && <SprintSchedule sprint={sprint} timeline={timeline}/>}
         </section>
         <section className="panel capacity-panel">
           <div className="panel-head"><strong>Commitment check</strong></div>
@@ -199,6 +213,7 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
         <ul>
           <li className={sprint.goal.trim() ? 'ok' : 'issue'}>{sprint.goal.trim() ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}<span>{sprint.goal.trim() ? 'Sprint goal is set' : 'Add a sprint goal.'}</span></li>
           <li className={sprint.start && sprint.end && Date.parse(sprint.end) > Date.parse(sprint.start) ? 'ok' : 'issue'}>{sprint.start && sprint.end && Date.parse(sprint.end) > Date.parse(sprint.start) ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}<span>{sprint.start && sprint.end && Date.parse(sprint.end) > Date.parse(sprint.start) ? 'End date follows the start date' : 'Set an end date after the start date.'}</span></li>
+          {endReached && <li className="issue"><AlertCircle size={16}/><span>{endReachedText}</span></li>}
           <li className={inSprint.length ? 'ok' : 'issue'}>{inSprint.length ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}<span>{inSprint.length ? `${inSprint.length} item${inSprint.length === 1 ? '' : 's'} allocated` : 'Allocate at least one work item.'}</span></li>
           <li className={allEstimated ? 'ok' : 'issue'}>{allEstimated ? <CheckCircle2 size={16}/> : <AlertCircle size={16}/>}<span>{allEstimated ? 'Every item is estimated' : unestimatedKeys.length ? `Estimate ${unestimatedKeys.join(', ')} before starting.` : 'Add items before checking estimates.'}</span></li>
           <li className={activeSprint ? 'issue' : 'ok'}>{activeSprint ? <AlertCircle size={16}/> : <CheckCircle2 size={16}/>}<span>{activeSprint ? `Complete ${activeSprint.name} before starting another sprint.` : 'No other sprint is active'}</span></li>
@@ -213,7 +228,7 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
               <button className="planning-item-name" onClick={() => onItem(i.id)}><span className="item-key">{i.key}</span><strong>{i.title}</strong></button>
               <span>{i.points ?? '—'} pts</span>
               <label className="hours-field"><span className="sr-only">Planned hours for {i.key}</span><input type="number" min="0" value={i.hours ?? ''} placeholder="hrs" disabled={!canPlan || sprint.state !== 'planned'} onChange={e => dispatch({ type: 'update-item', projectId: project.id, itemId: i.id, patch: { hours: e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0) } })}/></label>
-              {canPlan && sprint.state !== 'completed' && <button className="text-link" onClick={() => requestAllocate(i, null)}>Remove</button>}
+              {canChangeScope && <button className="text-link" onClick={() => requestAllocate(i, null)}>Remove</button>}
             </div>)}
             {!inSprint.length && <div className="empty">No items allocated yet.</div>}
           </div>
@@ -224,7 +239,7 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
             {candidate.map(i => <div key={i.id} className="planning-item">
               <button className="planning-item-name" onClick={() => onItem(i.id)}><span className="item-key">{i.key}</span><strong>{i.title}</strong></button>
               <span>{i.points ?? '—'} pts</span>
-              {canPlan && sprint.state !== 'completed' && <button className="button tertiary" onClick={() => requestAllocate(i, sprint.id)}>Add <ArrowRight size={14}/></button>}
+              {canChangeScope && <button className="button tertiary" onClick={() => requestAllocate(i, sprint.id)}>Add <ArrowRight size={14}/></button>}
             </div>)}
             {!candidate.length && <div className="empty">All ready items are allocated.</div>}
           </div>
@@ -232,9 +247,9 @@ export function Planning({ project, role, onItem }: { project: Project; role: Ro
       </div>
 
       <div className="planning-footer">
-        <span><CalendarDays size={16}/> Dates use {project.timezone}</span>
-        {canPlan && sprint.state === 'planned' && <button className="button primary" disabled={startIssues.length > 0} aria-describedby="start-checks-heading" title={startIssues.length ? startIssues.join(' ') : undefined} onClick={() => dispatch({ type: 'start', projectId: project.id, sprintId: sprint.id })}>Start sprint <ArrowRight size={17}/></button>}
-        {canPlan && sprint.state === 'active' && <button className="button primary" onClick={openComplete}>Complete sprint <ArrowRight size={17}/></button>}
+        <span><CalendarDays size={16}/> Dates use {domain?.calendar.timezone}</span>
+        {canEditPlan && <button className="button primary" disabled={startIssues.length > 0} aria-describedby="start-checks-heading" title={startIssues.length ? startIssues.join(' ') : undefined} onClick={() => dispatch({ type: 'start', projectId: project.id, sprintId: sprint.id })}>Start sprint <ArrowRight size={17}/></button>}
+        {canComplete && <button className="button primary" onClick={openComplete}>Complete sprint <ArrowRight size={17}/></button>}
       </div>
       {sprint.state === 'planned' && activeSprint && <div className="inline-note"><AlertCircle size={16}/> Complete {activeSprint.name} before starting another.</div>}
     </> : <div className="empty panel">No sprint exists. Create one to begin planning.</div>}

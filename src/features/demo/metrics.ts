@@ -1,6 +1,37 @@
+import { addLocalDays, createSprintDomain, ProjectCalendar } from './domain';
 import { Event, Project, Sprint, SprintState, STATUSES, Status } from './model';
 
-export type MetricPoint = { date: string; original: number; current: number; ideal: number; scopeChange: number; counts: Record<Status, number> };
+export type SampleKind = 'start' | 'day' | 'planned-end' | 'now' | 'completion';
+export const SAMPLE_LABELS: Record<SampleKind, string> = {
+  start: 'Actual start',
+  day: 'Day end',
+  'planned-end': 'Planned end',
+  now: 'Now (today partial)',
+  completion: 'Completion cutoff',
+};
+/** One timeline sample. Beyond the cutoff only the ideal is known, so every actual value is null. */
+export type MetricPoint = {
+  at: string;
+  date: string;
+  time: string;
+  kind: SampleKind;
+  partial: boolean;
+  original: number | null;
+  current: number | null;
+  ideal: number | null;
+  scopeChange: number | null;
+  counts: Record<Status, number> | null;
+};
+export type SprintTimeline = {
+  timezone: string;
+  /** False when falling back to the project's current setting. */
+  timezoneRecorded: boolean;
+  startedAt: string | null;
+  plannedEnd: string | null;
+  cutoff: string | null;
+  samples: MetricPoint[];
+  scopeEvents: Array<{ at: string; date: string; itemId: string; kind: 'scope-add' | 'scope-remove' }>;
+};
 export type SprintOutcome = {
   itemId: string;
   key: string;
@@ -29,63 +60,43 @@ export type SprintSummary = {
   pointsAdded: number;
   pointsRemoved: number;
   outcomes: SprintOutcome[];
+  timeline: SprintTimeline;
 };
 
 const zeroCounts = (): Record<Status, number> => Object.fromEntries(STATUSES.map(s => [s, 0])) as Record<Status, number>;
 const atOrBefore = (value: string, cutoff: string) => Date.parse(value) <= Date.parse(cutoff);
-const dateSerial = (date: string) => {
-  const [year, month, day] = date.split('-').map(Number);
-  return Date.UTC(year, month - 1, day);
-};
-const zonedFormatters = new Map<string, Intl.DateTimeFormat>();
-function zonedFormatter(timeZone: string) {
-  let formatter = zonedFormatters.get(timeZone);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    });
-    zonedFormatters.set(timeZone, formatter);
-  }
-  return formatter;
-}
-function zonedParts(instant: number, timeZone: string) {
-  const parts = zonedFormatter(timeZone).formatToParts(new Date(instant));
-  const value = (type: string) => Number(parts.find(part => part.type === type)?.value ?? 0);
-  return { year: value('year'), month: value('month'), day: value('day'), hour: value('hour'), minute: value('minute'), second: value('second') };
-}
-function offsetMs(instant: number, timeZone: string): number {
-  const parts = zonedParts(instant, timeZone);
-  const wholeSecond = Math.floor(instant / 1000) * 1000;
-  return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second) - wholeSecond;
-}
-function zonedWallTime(date: string, hour: number, minute: number, second: number, millisecond: number, timeZone: string): number {
-  const [year, month, day] = date.split('-').map(Number);
-  const wall = Date.UTC(year, month - 1, day, hour, minute, second, millisecond);
-  let instant = wall - offsetMs(wall, timeZone);
-  instant = wall - offsetMs(instant, timeZone);
-  return instant;
-}
+/** Projecting the ideal beyond this many days keeps only the planned-end point. */
+const MAX_PROJECTED_DAYS = 366;
 /** ISO instant of 23:59:59.999 on the given local date in the project timezone. */
 export function zonedDayEnd(date: string, timeZone = 'Asia/Karachi'): string {
-  return new Date(zonedWallTime(date, 23, 59, 59, 999, timeZone)).toISOString();
+  return new ProjectCalendar(timeZone).endOfDay(date);
 }
 /** Calendar date (YYYY-MM-DD) of an ISO instant in the project timezone. */
 export function localDate(iso: string, timeZone = 'Asia/Karachi'): string {
-  const parts = zonedParts(Date.parse(iso), timeZone);
-  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+  return new ProjectCalendar(timeZone).toLocalDate(iso);
+}
+/**
+ * A sprint's events up to the cutoff, in replay order. The database stamps the
+ * commitment a few milliseconds after started_at, so each original item's first
+ * addition is read as happening at the start.
+ */
+function replayEvents(sprint: Sprint, events: Event[], cutoff: string): Event[] {
+  const committed = new Set<string>();
+  return events
+    .filter(e => e.sprintId === sprint.id)
+    .sort((a, b) => a.sequence - b.sequence)
+    .map(event => {
+      if (event.kind !== 'scope-add' || !sprint.originalItemIds.includes(event.itemId) || committed.has(event.itemId)) return event;
+      committed.add(event.itemId);
+      return sprint.startedAt && !atOrBefore(event.at, sprint.startedAt) ? { ...event, at: sprint.startedAt } : event;
+    })
+    .filter(e => atOrBefore(e.at, cutoff));
 }
 export function snapshot(sprint: Sprint, events: Event[], cutoff: string) {
   const scope = new Map<string, number>();
   const status = new Map<string, Status>();
   let scopeChange = 0;
-  for (const event of events.filter(e => e.sprintId === sprint.id && atOrBefore(e.at, cutoff)).sort((a, b) => a.sequence - b.sequence)) {
+  for (const event of replayEvents(sprint, events, cutoff)) {
     if (event.kind === 'scope-add') { scope.set(event.itemId, event.points ?? 0); status.set(event.itemId, event.status ?? 'To Do'); if (!sprint.originalItemIds.includes(event.itemId)) scopeChange++; }
     if (event.kind === 'scope-remove') { scope.delete(event.itemId); scopeChange--; }
     if (event.kind === 'status' && scope.has(event.itemId) && event.status) status.set(event.itemId, event.status);
@@ -97,28 +108,65 @@ export function snapshot(sprint: Sprint, events: Event[], cutoff: string) {
   const counts = zeroCounts(); for (const id of scope.keys()) counts[status.get(id) ?? 'To Do']++;
   return { commitment, original: commitment - originalDelivered, originalDelivered, current, delivered, scopeChange, counts };
 }
-export function idealRemaining(sprint: Sprint, cutoff: string, timeZone = 'Asia/Karachi') {
-  const commitment = Object.values(sprint.frozenPoints).reduce((a, b) => a + b, 0);
-  const start = zonedWallTime(sprint.start, 0, 0, 0, 0, timeZone);
-  const end = zonedWallTime(sprint.end, 0, 0, 0, 0, timeZone);
-  const duration = end - start;
-  if (duration <= 0) return 0;
-  const elapsed = Date.parse(cutoff) - start;
-  return Math.round(commitment * Math.max(0, 1 - elapsed / duration) * 10) / 10;
+export function idealRemaining(sprint: Sprint, cutoff: string, timeZone = 'Asia/Karachi'): number | null {
+  return createSprintDomain(sprint, timeZone).idealRemainingAt(cutoff);
 }
-export function series(sprint: Sprint, events: Event[], today: string, timeZone = 'Asia/Karachi'): MetricPoint[] {
-  if (sprint.state === 'planned') return [];
-  const final = sprint.state === 'completed' ? localDate(sprint.completedAt ?? zonedDayEnd(sprint.end, timeZone), timeZone) : today;
-  const start = dateSerial(sprint.start);
-  const end = Math.max(start, dateSerial(final));
-  const points: MetricPoint[] = [];
-  for (let time = start; time <= end; time += 86400000) {
-    const date = new Date(time).toISOString().slice(0, 10);
-    const cutoff = date === today && sprint.state === 'active' ? new Date().toISOString() : zonedDayEnd(date, timeZone);
-    const snap = snapshot(sprint, events, cutoff);
-    points.push({ date, original: snap.original, current: snap.current, ideal: idealRemaining(sprint, cutoff, timeZone), scopeChange: snap.scopeChange, counts: snap.counts });
+/** The one dataset behind planning, charts, data tables, CSV and PDF (FR-4, FR-5). */
+export function sprintTimeline(sprint: Sprint, events: Event[], now: Date | string = new Date(), timeZone = 'Asia/Karachi'): SprintTimeline {
+  const domain = createSprintDomain(sprint, timeZone);
+  const { calendar, startedAt } = domain;
+  const plannedEnd = domain.plannedEnd();
+  const cutoff = domain.timelineCutoff(now);
+  const timeline: SprintTimeline = {
+    timezone: calendar.timezone, timezoneRecorded: Boolean(sprint.timezone), startedAt, plannedEnd, cutoff, samples: [], scopeEvents: [],
+  };
+  if (!cutoff) return timeline;
+
+  const recorded = replayEvents(sprint, events, cutoff);
+  // Without a recorded start, sample from the first recorded commitment but never present it as the start.
+  // Status events cannot be used here: moves made while planning also carry the sprint id.
+  const additions = recorded.filter(e => e.kind === 'scope-add').map(e => Date.parse(e.at));
+  if (!startedAt && !additions.length) return timeline;
+  const from = startedAt ? Date.parse(startedAt) : Math.min(...additions);
+  const until = Date.parse(cutoff);
+  const end = plannedEnd ? Date.parse(plannedEnd) : null;
+  const projects = startedAt !== null && end !== null && end > from;
+
+  const instants = new Map<number, SampleKind>();
+  if (startedAt) instants.set(from, 'start');
+  const lastDayEnd = projects && end > until && end - until <= MAX_PROJECTED_DAYS * 86400000 ? end : until;
+  for (let date = calendar.toLocalDate(new Date(from)); ; date = addLocalDays(date, 1)) {
+    const at = Date.parse(calendar.endOfDay(date));
+    if (at >= lastDayEnd) break;
+    instants.set(at, 'day');
   }
-  return points;
+  if (projects) instants.set(end, 'planned-end');
+  instants.set(until, domain.isTodayPartial(now) ? 'now' : 'completion');
+
+  timeline.samples = [...instants].sort((a, b) => a[0] - b[0]).map(([instant, kind]) => {
+    const at = new Date(instant).toISOString();
+    const snap = instant <= until ? snapshot(sprint, recorded, at) : null;
+    return {
+      at,
+      date: calendar.toLocalDate(at),
+      time: calendar.toLocalTime(at),
+      kind,
+      partial: kind === 'now',
+      original: snap?.original ?? null,
+      current: snap?.current ?? null,
+      ideal: domain.idealRemainingAt(at),
+      scopeChange: snap?.scopeChange ?? null,
+      counts: snap?.counts ?? null,
+    };
+  });
+  timeline.scopeEvents = recorded.flatMap(event =>
+    event.kind === 'scope-remove' || (event.kind === 'scope-add' && !sprint.originalItemIds.includes(event.itemId))
+      ? [{ at: event.at, date: calendar.toLocalDate(event.at), itemId: event.itemId, kind: event.kind }]
+      : []);
+  return timeline;
+}
+export function series(sprint: Sprint, events: Event[], now: Date | string, timeZone = 'Asia/Karachi'): MetricPoint[] {
+  return sprintTimeline(sprint, events, now, timeZone).samples;
 }
 export function velocity(project: Project) {
   return project.sprints.filter(s => s.state === 'completed').sort((a, b) => a.start.localeCompare(b.start)).map(s => ({ name: s.name, committed: s.result?.commitment ?? 0, delivered: s.result?.delivered ?? 0, added: project.events.filter(e => e.sprintId === s.id && e.kind === 'scope-add' && !s.originalItemIds.includes(e.itemId)).reduce((sum, e) => sum + (e.points ?? 0), 0) }));
@@ -126,13 +174,11 @@ export function velocity(project: Project) {
 
 /** The exact dataset used by the dashboard charts and by the CSV/PDF exports. */
 export function sprintSummary(project: Project, sprint: Sprint, cutoffOverride?: string): SprintSummary {
-  const cutoff = sprint.state === 'completed'
-    ? (sprint.result?.cutoff ?? sprint.completedAt ?? zonedDayEnd(sprint.end, project.timezone))
-    : (cutoffOverride ?? new Date().toISOString());
+  const now = cutoffOverride ?? new Date().toISOString();
+  const timeline = sprintTimeline(sprint, project.events, now, project.timezone);
+  const cutoff = timeline.cutoff ?? now;
   const snap = snapshot(sprint, project.events, cutoff);
-  const events = project.events
-    .filter(e => e.sprintId === sprint.id && atOrBefore(e.at, cutoff))
-    .sort((a, b) => a.sequence - b.sequence);
+  const events = replayEvents(sprint, project.events, cutoff);
   const points = new Map<string, number>();
   const statuses = new Map<string, Status>();
   const everIncluded = new Set<string>();
@@ -186,7 +232,7 @@ export function sprintSummary(project: Project, sprint: Sprint, cutoffOverride?:
     state: sprint.state,
     start: sprint.start,
     end: sprint.end,
-    timezone: project.timezone,
+    timezone: timeline.timezone,
     cutoff,
     commitment,
     originalDelivered,
@@ -197,7 +243,12 @@ export function sprintSummary(project: Project, sprint: Sprint, cutoffOverride?:
     pointsAdded,
     pointsRemoved,
     outcomes,
+    timeline,
   };
+}
+
+export function timezoneSource(timeline: SprintTimeline): string {
+  return timeline.timezoneRecorded ? 'Recorded at start' : 'Current project setting';
 }
 
 export function completionLabel(summary: Pick<SprintSummary, 'completionPercent'>): string {
@@ -207,16 +258,20 @@ export function completionLabel(summary: Pick<SprintSummary, 'completionPercent'
 /** Escape a CSV cell and neutralise spreadsheet formula injection. */
 export function csvCell(value: string | number | null | undefined): string {
   const text = value == null ? '' : String(value);
-  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  const safe = typeof value === 'string' && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"', '""')}"`;
 }
 export function sprintSummaryCsv(summary: SprintSummary): string {
+  const { timeline } = summary;
   const rows: Array<Array<string | number | null>> = [
     ['Project', summary.projectName],
     ['Sprint', summary.sprintName],
     ['State', summary.state],
     ['Goal', summary.goal],
     ['Dates', `${summary.start} to ${summary.end} (${summary.timezone})`],
+    ['Timezone source', timezoneSource(timeline)],
+    ['Actual start', timeline.startedAt ?? (timeline.cutoff ? 'Not recorded' : 'Not started')],
+    ['Planned end boundary', timeline.plannedEnd],
     ['Data cutoff', summary.cutoff],
     ['Original commitment', summary.commitment],
     ['Scope changes', summary.scopeChangeCount],
@@ -228,6 +283,9 @@ export function sprintSummaryCsv(summary: SprintSummary): string {
     [],
     ['Key', 'Title', 'Points', 'Final status', 'Original commitment', 'Added mid-sprint'],
     ...summary.outcomes.map(outcome => [outcome.key, outcome.title, outcome.points, outcome.status, outcome.original ? 'Yes' : 'No', outcome.addedMidSprint ? 'Yes' : 'No']),
+    [],
+    ['Date', 'Local time', 'Sample', 'UTC instant', 'Original remaining (pts)', 'Current remaining (pts)', 'Ideal (pts)', 'Net scope changes', ...STATUSES.map(status => `${status} (items)`)],
+    ...timeline.samples.map(r => [r.date, r.time, SAMPLE_LABELS[r.kind], r.at, r.original, r.current, r.ideal, r.scopeChange, ...STATUSES.map(status => r.counts?.[status] ?? null)]),
   ];
   return rows.map(row => row.map(csvCell).join(',')).join('\r\n');
 }

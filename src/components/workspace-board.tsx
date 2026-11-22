@@ -28,7 +28,7 @@ export function Board({ project, role, onItem }: { project: Project; role: Role;
     {active ? <>
       <div className="board-summary">
         <span><strong>{active.goal}</strong></span>
-        <span>{active.start} — {active.end} · {project.timezone}</span>
+        <span>{active.start} — {active.end} · {active.timezone ?? project.timezone}</span>
         <span>{items.filter(i => i.status === 'Done').length}/{items.length} done</span>
       </div>
       <div className="board-scroll"><div className="board-columns">

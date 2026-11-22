@@ -138,6 +138,14 @@
 .start-checks li.ok{color:#3D6B5A}
 .start-checks li.issue{color:var(--red)}
 .wip-over{display:inline-flex;align-items:center;gap:3px;color:var(--red);font-weight:700;font-size:9px;text-align:right;line-height:1.25}
+.sprint-schedule{margin:0;padding:13px 19px;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 16px;font-size:12px}
+.sprint-schedule>div{min-width:0}
+.sprint-schedule dt{color:var(--muted);font-size:11px}
+.sprint-schedule dd{margin:2px 0 0;overflow-wrap:anywhere}
+.sprint-schedule .schedule-overrun dd{color:var(--red);font-weight:700}
+.chart-table .timeline-table th,.chart-table .timeline-table td{padding:7px 6px}
+.chart-table .timeline-table th{white-space:normal;vertical-align:bottom;letter-spacing:.02em}
+.chart-table .timeline-table td:first-child{white-space:nowrap}
 .export-panel{margin-bottom:15px}
 .export-actions{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px 24px;padding:17px 19px}
 .export-actions>div{display:flex;flex-direction:column;gap:6px}
@@ -159,6 +167,7 @@
   .print-report .print-meta th{width:18%}
   .print-report .print-meta td{width:32%}
   .print-report .print-table tr{break-inside:avoid}
+  .print-report .print-timeline th,.print-report .print-timeline td{font-size:8pt;padding:1.2mm}
   .print-report .print-note{font-size:8.5pt;color:#444;margin:3mm 0 0}
 }
 
