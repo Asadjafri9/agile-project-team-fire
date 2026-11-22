@@ -1,3 +1,5 @@
+import { addLocalDays, ProjectCalendar } from './domain/ProjectCalendar';
+
 export const STATUSES = ['To Do', 'In Progress', 'Code Review', 'Testing', 'Done'] as const;
 export type Status = typeof STATUSES[number];
 export type Role = 'Product Owner' | 'Scrum Master' | 'Developer' | 'Viewer';
@@ -16,7 +18,10 @@ export type WorkItem = { id: string; key: string; title: string; description: st
   /** Live mode only (absent in demo data). */
   version?: number; attachments?: Attachment[]; comments?: Comment[] };
 export type Member = { id: string; name: string; initials: string; role: Role; title: string };
-export type Sprint = { id: string; name: string; goal: string; state: SprintState; start: string; end: string; pointCapacity: number; hourCapacity: number; originalItemIds: string[]; frozenPoints: Record<string, number>; completedAt?: string; result?: { delivered: number; originalDelivered: number; commitment: number; cutoff: string } };
+export type Sprint = { id: string; name: string; goal: string; state: SprintState; start: string; end: string; pointCapacity: number; hourCapacity: number; originalItemIds: string[]; frozenPoints: Record<string, number>;
+  /** Bolt 002: recorded start instant and the timezone frozen at start. Null for planned and legacy sprints. */
+  startedAt?: string | null; timezone?: string | null;
+  completedAt?: string; result?: { delivered: number; originalDelivered: number; commitment: number; cutoff: string } };
 export type Event = { id: string; sequence: number; at: string; sprintId: string; itemId: string; kind: 'scope-add' | 'scope-remove' | 'status'; status?: Status; points?: number; actor: string };
 export type Evidence = { id: string; title: string; version: string; kind: string; date: string; note: string; /** Live only: attached document. */ file?: { name: string; size: number; mime: string } };
 export type Project = { id: string; name: string; code: string; description: string; timezone: string; wip: Record<Status, number>; members: Member[]; items: WorkItem[]; sprints: Sprint[]; events: Event[]; evidence: Evidence[];
@@ -52,8 +57,8 @@ export const initialState: DemoState = {
       item(111, 'Draft release summary', 'To Do', 2, 5, 'm1', null, 'Low', 'Evidence', '4.3.1', ['Sprint metrics included'], 0, 'Task'),
     ],
     sprints: [
-      { id: 's1', name: 'Sprint 01', goal: 'Establish the product foundation', state: 'completed', start: '2026-10-05', end: '2026-10-16', pointCapacity: 18, hourCapacity: 54, originalItemIds: ['i101', 'i102', 'i103'], frozenPoints: { i101: 5, i102: 3, i103: 8 }, completedAt: '2026-10-16T12:00:00+05:00', result: { delivered: 16, originalDelivered: 16, commitment: 16, cutoff: '2026-10-16T12:00:00+05:00' } },
-      { id: 's2', name: 'Sprint 02', goal: 'Make planning and execution visible', state: 'active', start: '2026-10-19', end: '2026-10-30', pointCapacity: 22, hourCapacity: 72, originalItemIds: ['i104', 'i105', 'i106', 'i107'], frozenPoints: { i104: 5, i105: 3, i106: 2, i107: 8 } },
+      { id: 's1', name: 'Sprint 01', goal: 'Establish the product foundation', state: 'completed', start: '2026-10-05', end: '2026-10-16', pointCapacity: 18, hourCapacity: 54, originalItemIds: ['i101', 'i102', 'i103'], frozenPoints: { i101: 5, i102: 3, i103: 8 }, startedAt: '2026-10-05T09:00:00+05:00', timezone: 'Asia/Karachi', completedAt: '2026-10-16T12:00:00+05:00', result: { delivered: 16, originalDelivered: 16, commitment: 16, cutoff: '2026-10-16T12:00:00+05:00' } },
+      { id: 's2', name: 'Sprint 02', goal: 'Make planning and execution visible', state: 'active', start: '2026-10-19', end: '2026-10-30', pointCapacity: 22, hourCapacity: 72, originalItemIds: ['i104', 'i105', 'i106', 'i107'], frozenPoints: { i104: 5, i105: 3, i106: 2, i107: 8 }, startedAt: '2026-10-19T09:00:00+05:00', timezone: 'Asia/Karachi' },
       { id: 's3', name: 'Sprint 03', goal: 'Polish evidence and release readiness', state: 'planned', start: '2026-11-02', end: '2026-11-13', pointCapacity: 20, hourCapacity: 68, originalItemIds: [], frozenPoints: {} },
     ],
     events: [
@@ -81,13 +86,14 @@ const DAY = 86400000;
  */
 export function rebaseDemoDates(state: DemoState, today: Date = new Date()): DemoState {
   const anchor = Date.parse('2026-10-19T00:00:00Z');
-  const target = Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`) - 5 * DAY;
-  const shift = Math.round((target - anchor) / DAY) * DAY;
-  if (!shift) return state;
-  const date = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + shift).toISOString().slice(0, 10);
-  const instant = (t: string) => new Date(Date.parse(t) + shift).toISOString();
   for (const p of state.projects) {
+    const calendar = new ProjectCalendar(p.timezone);
+    const days = Math.round((Date.parse(`${calendar.toLocalDate(today)}T00:00:00Z`) - anchor) / DAY) - 5;
+    if (!days) continue;
+    const date = (d: string) => addLocalDays(d, days);
+    const instant = (t: string) => calendar.shiftDays(t, days);
     for (const sp of p.sprints) {
+      if (sp.startedAt) sp.startedAt = instant(sp.startedAt);
       sp.start = date(sp.start); sp.end = date(sp.end);
       if (sp.completedAt) sp.completedAt = instant(sp.completedAt);
       if (sp.result) sp.result.cutoff = instant(sp.result.cutoff);

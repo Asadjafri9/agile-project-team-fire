@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react';
 import { ChecklistEntry, cloneInitialState, DemoState, Evidence, Event, Invitation, ItemType, Notification, Priority, Role, Sprint, Status, WorkItem } from './model';
+import { addLocalDays, createSprintDomain, ProjectCalendar } from './domain';
 import { ApiError, getWorkspace, LiveUser, loginRequest, logoutRequest, postAction, signupRequest, WorkspacePayload } from './live';
 
 export type Action =
@@ -54,20 +55,20 @@ export function allowed(role: Role, action: Capability): boolean {
 export const wipWarning = (items: WorkItem[], status: Status, limit: number, movingId: string): boolean => status !== 'Done' && status !== 'To Do' && items.filter(i => i.status === status && i.id !== movingId).length + 1 > limit;
 export const canMoveToDone = (item: WorkItem): boolean => item.checklist.every(c => c.done);
 
-function addEvent(state: DemoState, projectId: string, event: Omit<Event, 'id' | 'sequence' | 'at'>) {
+function addEvent(state: DemoState, projectId: string, now: Date, event: Omit<Event, 'id' | 'sequence' | 'at'>) {
   const p = state.projects.find(p => p.id === projectId)!;
   const sequence = Math.max(0, ...p.events.map(e => e.sequence)) + 1;
-  p.events.push({ ...event, id: `e${sequence}`, sequence, at: new Date().toISOString() });
+  p.events.push({ ...event, id: `e${sequence}`, sequence, at: now.toISOString() });
 }
-export function reduceDemo(previous: DemoState, action: Action): DemoState {
+export function reduceDemo(previous: DemoState, action: Action, now: Date = new Date()): DemoState {
   if (action.type === 'hydrate') return action.value?.version === 1 ? action.value : previous;
-  if (action.type === 'reset') return cloneInitialState();
+  if (action.type === 'reset') return cloneInitialState(now);
   const state: DemoState = JSON.parse(JSON.stringify(previous));
   if (action.type === 'enter') { state.entered = true; return state; }
   if (action.type === 'role') { state.role = action.role; return state; }
   if (action.type === 'create-project') {
     if (!allowed(state.role, 'team') || !action.name.trim()) return previous;
-    const p = cloneInitialState().projects[0];
+    const p = cloneInitialState(now).projects[0];
     p.id = `project-${Date.now()}`; p.name = action.name.trim(); p.code = `PRJ`; p.items = []; p.sprints = []; p.events = []; p.evidence = [];
     state.projects.push(p); return state;
   }
@@ -78,7 +79,8 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
   if (action.type === 'create-sprint') {
     if (!allowed(state.role, 'plan') || !action.name.trim()) return previous;
     const n = p.sprints.length + 1;
-    const start = action.start ?? new Date().toISOString().slice(0, 10), end = action.end ?? new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const today = new ProjectCalendar(p.timezone).toLocalDate(now);
+    const start = action.start ?? today, end = action.end ?? addLocalDays(today, 14);
     if (end <= start) return previous;
     p.sprints.push({ id: `s${Date.now()}`, name: action.name.trim(), goal: action.goal?.trim() ?? '', state: 'planned', start, end, pointCapacity: action.pointCapacity ?? 20, hourCapacity: action.hourCapacity ?? 70, originalItemIds: [], frozenPoints: {} });
   } else if (action.type === 'create-item') {
@@ -106,15 +108,15 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
     if (!i || i.status === 'Done' || (action.sprintId && (!s || s.state === 'completed'))) return previous;
     const old = p.sprints.find(s => s.id === i.sprintId);
     if (old?.state === 'completed') return previous;
-    if (old?.state === 'active') addEvent(state, p.id, { sprintId: old.id, itemId: i.id, kind: 'scope-remove', actor: 'demo' });
+    if (old?.state === 'active') addEvent(state, p.id, now, { sprintId: old.id, itemId: i.id, kind: 'scope-remove', actor: 'demo' });
     i.sprintId = action.sprintId;
-    if (s?.state === 'active') addEvent(state, p.id, { sprintId: s.id, itemId: i.id, kind: 'scope-add', points: i.points ?? 0, status: i.status, actor: 'demo' });
+    if (s?.state === 'active') addEvent(state, p.id, now, { sprintId: s.id, itemId: i.id, kind: 'scope-add', points: i.points ?? 0, status: i.status, actor: 'demo' });
   } else if (action.type === 'move') {
     if (!allowed(state.role, 'move')) return previous;
     const i = p.items.find(i => i.id === action.itemId), s = p.sprints.find(s => s.id === i?.sprintId);
     if (!i || i.status === action.status || (action.status === 'Done' && !canMoveToDone(i)) || s?.state === 'completed') return previous;
     i.status = action.status;
-    if (s?.state === 'active') addEvent(state, p.id, { sprintId: s.id, itemId: i.id, kind: 'status', status: action.status, actor: 'demo' });
+    if (s?.state === 'active') addEvent(state, p.id, now, { sprintId: s.id, itemId: i.id, kind: 'status', status: action.status, actor: 'demo' });
   } else if (action.type === 'sprint') {
     if (!allowed(state.role, 'plan')) return previous;
     const s = p.sprints.find(s => s.id === action.sprintId); if (!s || s.state !== 'planned') return previous;
@@ -123,10 +125,11 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
     if (!allowed(state.role, 'plan') || p.sprints.some(s => s.state === 'active')) return previous;
     const s = p.sprints.find(s => s.id === action.sprintId);
     // Issue #4: dates are required and an expired sprint cannot start.
-    if (!s || s.state !== 'planned' || !s.start || !s.end || s.start >= s.end || s.end < new Date().toISOString().slice(0, 10)) return previous;
+    if (!s || !createSprintDomain(s, p.timezone).canStartAt(now)) return previous;
+    s.startedAt = now.toISOString(); s.timezone = p.timezone;
     s.state = 'active'; s.originalItemIds = p.items.filter(i => i.sprintId === s.id).map(i => i.id);
     s.frozenPoints = Object.fromEntries(p.items.filter(i => i.sprintId === s.id).map(i => [i.id, i.points ?? 0]));
-    for (const i of p.items.filter(i => i.sprintId === s.id)) addEvent(state, p.id, { sprintId: s.id, itemId: i.id, kind: 'scope-add', points: i.points ?? 0, status: i.status, actor: 'demo' });
+    for (const i of p.items.filter(i => i.sprintId === s.id)) addEvent(state, p.id, now, { sprintId: s.id, itemId: i.id, kind: 'scope-add', points: i.points ?? 0, status: i.status, actor: 'demo' });
   } else if (action.type === 'complete') {
     if (!allowed(state.role, 'complete')) return previous;
     const s = p.sprints.find(s => s.id === action.sprintId); if (!s || s.state !== 'active') return previous;
@@ -134,7 +137,7 @@ export function reduceDemo(previous: DemoState, action: Action): DemoState {
     const delivered = included.filter(i => i.status === 'Done').reduce((sum, i) => sum + (p.events.filter(e => e.sprintId === s.id && e.itemId === i.id && e.kind === 'scope-add').at(-1)?.points ?? i.points ?? 0), 0);
     const originalDelivered = included.filter(i => i.status === 'Done' && s.originalItemIds.includes(i.id)).reduce((sum, i) => sum + (s.frozenPoints[i.id] ?? 0), 0);
     const commitment = Object.values(s.frozenPoints).reduce((a, b) => a + b, 0);
-    s.state = 'completed'; s.completedAt = new Date().toISOString(); s.result = { delivered, originalDelivered, commitment, cutoff: s.completedAt };
+    s.state = 'completed'; s.completedAt = now.toISOString(); s.result = { delivered, originalDelivered, commitment, cutoff: s.completedAt };
     const target = action.targetSprintId ? p.sprints.find(t => t.id === action.targetSprintId && t.state === 'planned') : undefined;
     for (const i of included.filter(i => i.status !== 'Done')) i.sprintId = target?.id ?? null; // SPR-06 carry-over
   }
@@ -179,9 +182,11 @@ function revisionsChanged(next: Record<string, number>, previous: Record<string,
   return false;
 }
 
+// React passes only state and action; the clock argument is there for callers that inject one.
+const reducer = (state: DemoState, action: Action) => reduceDemo(state, action);
 const Context = createContext<DemoContextValue | null>(null);
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [state, rawDispatch] = useReducer(reduceDemo, undefined, cloneInitialState);
+  const [state, rawDispatch] = useReducer(reducer, undefined, cloneInitialState);
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState<Mode>('demo');
   const [user, setUser] = useState<LiveUser | null>(null);

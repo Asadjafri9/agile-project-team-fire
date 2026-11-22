@@ -42,7 +42,7 @@ describe('issue #4: sprint start validates dates', () => {
     expect(after.projects[0].sprints.find(s => s.id === 's3')!.state).toBe('planned');
   });
   it('control: valid future dates start the sprint', () => {
-    const after = reduceDemo(ready(), { type: 'start', projectId: 'team-fire', sprintId: 's3' });
+    const after = reduceDemo(ready(), { type: 'start', projectId: 'team-fire', sprintId: 's3' }, today);
     expect(after.projects[0].sprints.find(s => s.id === 's3')!.state).toBe('active');
   });
 });

@@ -5,29 +5,49 @@ import { createPortal } from 'react-dom';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { BarChart3, CircleHelp, Download, Printer } from 'lucide-react';
 import { Project, STATUSES } from '@/features/demo/model';
-import { completionLabel, localDate, series, sprintSummary, sprintSummaryCsv, velocity } from '@/features/demo/metrics';
+import { ProjectCalendar } from '@/features/demo/domain';
+import { completionLabel, sprintSummary, sprintSummaryCsv, timezoneSource, velocity } from '@/features/demo/metrics';
+import { BurndownTable, FlowTable, startLabel, timezoneLabel } from './sprint-timeline';
 import { Pill } from './ui';
 
 const colors = { original: '#315A70', current: '#236A51', ideal: '#8B98A1', 'To Do': '#D9E0E5', 'In Progress': '#315A70', 'Code Review': '#668597', Testing: '#B08342', Done: '#236A51' };
 const chartMargin = { top: 8, right: 12, left: -18, bottom: 0 };
 
+/** One tick per local date, at its first instant inside the chart. */
+function dayTicks(rows: Array<{ t: number; date: string }>, calendar: ProjectCalendar): number[] {
+  return [...new Set(rows.map(r => r.date))].map(date => Math.max(rows[0].t, Date.parse(calendar.startOfDay(date))));
+}
+
 export function Analytics({ project }: { project: Project }) {
   const [selected, setSelected] = useState(project.sprints.find(s => s.state === 'active')?.id ?? project.sprints.at(-1)?.id ?? '');
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    setMounted(true);
+    // An active sprint's timeline runs through now, so move it along while the page stays open.
+    const timer = window.setInterval(() => setTick(n => n + 1), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
   // Never trust a stale/foreign selection: fall back to the active, then the latest sprint.
   const sprint = project.sprints.find(s => s.id === selected) ?? project.sprints.find(s => s.state === 'active') ?? project.sprints.at(-1);
-  const today = localDate(new Date().toISOString(), project.timezone);
-  const rows = useMemo(() => sprint ? series(sprint, project.events, today, project.timezone) : [], [sprint, project.events, today, project.timezone]);
-  const summary = useMemo(() => sprint ? sprintSummary(project, sprint) : null, [project, sprint]);
+  const summary = useMemo(() => sprint ? sprintSummary(project, sprint, new Date().toISOString()) : null, [project, sprint, tick]);
+  const timeline = summary?.timeline;
+  const rows = timeline?.samples ?? [];
+  const actualRows = rows.filter(r => r.counts !== null);
+  const started = Boolean(timeline?.cutoff);
+  const calendar = new ProjectCalendar(timeline?.timezone ?? project.timezone);
   const v = velocity(project);
-  const hasData = Boolean(sprint && sprint.state !== 'planned' && project.events.some(e => e.sprintId === sprint.id));
+  const hasData = Boolean(sprint && rows.length && project.events.some(e => e.sprintId === sprint.id));
   const exportReady = Boolean(summary && hasData);
   const completion = summary ? completionLabel(summary) : 'N/A';
-  const formatCutoff = (iso: string) => `${new Intl.DateTimeFormat('en-GB', { timeZone: project.timezone, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso))} (${project.timezone})`;
-  const cutoffIso = sprint?.result?.cutoff ?? summary?.cutoff ?? new Date().toISOString();
-  const scopeDates = sprint ? [...new Set(project.events.filter(e => e.sprintId === sprint.id && (e.kind === 'scope-remove' || e.kind === 'scope-add' && !sprint.originalItemIds.includes(e.itemId))).map(e => e.at.slice(5, 10)))] : [];
-  const chartRows = rows.map(r => ({ ...r, day: r.date.slice(5) }));
+  const scopeEvents = timeline?.scopeEvents ?? [];
+  // One marker per local day, so the labels do not overlap.
+  const scopeMarkers = scopeEvents.filter((e, i) => scopeEvents.findIndex(other => other.date === e.date) === i);
+  const itemKey = (id: string) => summary?.outcomes.find(o => o.itemId === id)?.key ?? id;
+  const chartRows = rows.map(r => ({ ...r, t: Date.parse(r.at) }));
+  const flowRows = chartRows.filter(r => r.counts !== null);
+  const dateTick = (t: number) => calendar.toLocalDate(new Date(t)).slice(5);
+  const tooltipTime = (t: unknown) => calendar.describe(new Date(Number(t)));
   const emptyCopy = sprint?.state === 'planned' ? 'This sprint is planned. Metrics appear after it starts.' : 'No sprint events have been recorded yet.';
   const fileBase = summary ? `${summary.projectCode}-${summary.sprintName}`.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'sprint-summary';
 
@@ -52,18 +72,20 @@ export function Analytics({ project }: { project: Project }) {
     {sprint ? <>
       <div className="analytics-context">
         <span><strong>Scope</strong> {project.name} / {sprint.name}</span>
-        <span><strong>Timezone</strong> {project.timezone}</span>
-        <span><strong>Cutoff</strong> {formatCutoff(cutoffIso)} {sprint.state === 'active' ? '(today partial)' : ''}</span>
+        <span><strong>Planned</strong> {sprint.start || '—'} to {sprint.end || '—'}</span>
+        {timeline && <span><strong>Actual start</strong> {startLabel(timeline)}</span>}
+        {timeline && <span><strong>Timezone</strong> {timezoneLabel(timeline)}</span>}
+        <span><strong>Cutoff</strong> {timeline?.cutoff ? calendar.describe(timeline.cutoff) : 'Not started'} {rows.some(r => r.partial) ? '(today partial)' : ''}</span>
         <span><strong>Units</strong> points; CFD in items</span>
       </div>
 
       {!hasData && <div className="callout" role="status"><CircleHelp size={20}/><div><strong>No delivery data yet</strong><p>{emptyCopy}</p></div></div>}
 
       <div className="stats-grid analytics-stats">
-        <div className="stat"><span>Original commitment</span><strong>{summary?.commitment ?? 0}<em> pts</em></strong><small>Frozen at sprint start</small></div>
-        <div className="stat"><span>Original remaining</span><strong>{summary ? summary.commitment - summary.originalDelivered : 0}<em> pts</em></strong><small>Undelivered original scope</small></div>
-        <div className="stat"><span>Current remaining</span><strong>{summary?.unresolved ?? 0}<em> pts</em></strong><small>Included work still open</small></div>
-        <div className="stat"><span>Commitment complete</span><strong>{completion}</strong><small>{summary?.originalDelivered ?? 0} original points delivered</small></div>
+        <div className="stat"><span>Original commitment</span><strong>{started ? <>{summary?.commitment}<em> pts</em></> : '—'}</strong><small>Frozen at sprint start</small></div>
+        <div className="stat"><span>Original remaining</span><strong>{started && summary ? <>{summary.commitment - summary.originalDelivered}<em> pts</em></> : '—'}</strong><small>Undelivered original scope</small></div>
+        <div className="stat"><span>Current remaining</span><strong>{started ? <>{summary?.unresolved}<em> pts</em></> : '—'}</strong><small>Included work still open</small></div>
+        <div className="stat"><span>Commitment complete</span><strong>{completion}</strong><small>{started ? `${summary?.originalDelivered} original points delivered` : 'Available after the sprint starts'}</small></div>
       </div>
 
       <section className="panel export-panel" aria-labelledby="export-heading">
@@ -82,21 +104,23 @@ export function Analytics({ project }: { project: Project }) {
 
       <div className="analytics-grid">
         <section className="panel chart-panel">
-          <div className="panel-head"><div><strong>Burndown</strong><span>Original commitment, current scope, and ideal · story points</span></div><Pill tone="neutral">{sprint.state}</Pill></div>
+          <div className="panel-head"><div><strong>Burndown</strong><span>Original commitment, current scope, and ideal · story points · {sprint.start} to {sprint.end} ({calendar.timezone})</span></div><Pill tone="neutral">{sprint.state}</Pill></div>
           {rows.length ? <>
             <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={280}><LineChart data={chartRows} margin={chartMargin}>
               <CartesianGrid stroke="#E8ECEF" vertical={false}/>
-              <XAxis dataKey="day" tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={dayTicks(chartRows, calendar)} tickFormatter={dateTick} minTickGap={8} tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
               <YAxis tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
-              <Tooltip/>
+              <Tooltip labelFormatter={tooltipTime}/>
               <Legend/>
-              {scopeDates.map(date => <ReferenceLine key={date} x={date} stroke="#A17635" strokeDasharray="3 4" label={{ value: 'Scope', position: 'top', fontSize: 10, fill: '#865500' }}/>)}
+              {timeline?.plannedEnd && <ReferenceLine x={Date.parse(timeline.plannedEnd)} stroke="#8B98A1" label={{ value: 'Planned end', position: 'insideTopRight', fontSize: 10, fill: '#52616D' }}/>}
+              {scopeMarkers.map(e => <ReferenceLine key={e.date} x={Date.parse(e.at)} stroke="#A17635" strokeDasharray="3 4" label={{ value: 'Scope', position: 'top', fontSize: 10, fill: '#865500' }}/>)}
               <Line isAnimationActive={false} type="linear" dataKey="original" name="Original remaining" stroke={colors.original} strokeWidth={2.5} dot={false}/>
               <Line isAnimationActive={false} type="linear" dataKey="current" name="Current scope remaining" stroke={colors.current} strokeWidth={2} dot={false}/>
-              <Line isAnimationActive={false} type="linear" dataKey="ideal" name="Ideal" stroke={colors.ideal} strokeDasharray="5 4" strokeWidth={2} dot={false}/>
+              {rows.some(r => r.ideal !== null) && <Line isAnimationActive={false} type="linear" dataKey="ideal" name="Ideal" stroke={colors.ideal} strokeDasharray="5 4" strokeWidth={2} dot={false}/>}
             </LineChart></ResponsiveContainer></div>
-            <div className="chart-legend-note">Scope changes: {project.events.filter(e => e.sprintId === sprint.id && (e.kind === 'scope-add' && !sprint.originalItemIds.includes(e.itemId) || e.kind === 'scope-remove')).map(e => `${e.kind === 'scope-add' ? '+' : '−'} ${e.itemId} (${e.at.slice(0, 10)})`).join(' · ') || 'none'}</div>
-            <details className="chart-table"><summary>View burndown data table</summary><div className="table-scroll"><table className="data-table"><thead><tr><th>Date</th><th>Original remaining (pts)</th><th>Current remaining (pts)</th><th>Ideal (pts)</th><th>Net scope changes</th></tr></thead><tbody>{rows.map(r => <tr key={r.date}><td>{r.date}</td><td>{r.original}</td><td>{r.current}</td><td>{r.ideal}</td><td>{r.scopeChange}</td></tr>)}</tbody></table></div></details>
+            {!timeline?.startedAt && <div className="chart-legend-note">Start not recorded: the ideal line is not estimated, and samples begin on the day of the first recorded scope event.</div>}
+            <div className="chart-legend-note">Scope changes: {scopeEvents.map(e => `${e.kind === 'scope-add' ? '+' : '−'} ${itemKey(e.itemId)} (${e.date})`).join(' · ') || 'none'}</div>
+            <details className="chart-table"><summary>View burndown data table</summary><div className="table-scroll"><BurndownTable rows={rows} className="data-table timeline-table"/></div></details>
           </> : <div className="empty">{emptyCopy}</div>}
         </section>
 
@@ -118,17 +142,17 @@ export function Analytics({ project }: { project: Project }) {
       </div>
 
       <section className="panel chart-panel cfd-panel">
-        <div className="panel-head"><div><strong>Cumulative flow</strong><span>Included work items by latest status at each day end · item count</span></div></div>
+        <div className="panel-head"><div><strong>Cumulative flow</strong><span>Included work items by latest status at each day end and at the cutoff · item count · {calendar.timezone}</span></div></div>
         {rows.length ? <>
-          <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={290}><AreaChart data={chartRows} margin={chartMargin}>
+          <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={290}><AreaChart data={flowRows} margin={chartMargin}>
             <CartesianGrid stroke="#E8ECEF" vertical={false}/>
-            <XAxis dataKey="day" tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
+            <XAxis dataKey="t" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={dayTicks(flowRows, calendar)} tickFormatter={dateTick} minTickGap={8} tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
             <YAxis allowDecimals={false} tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
-            <Tooltip/>
+            <Tooltip labelFormatter={tooltipTime}/>
             <Legend/>
             {STATUSES.map(status => <Area isAnimationActive={false} key={status} type="stepAfter" dataKey={`counts.${status}`} name={status} stackId="count" fill={colors[status]} stroke={colors[status]}/>)}
           </AreaChart></ResponsiveContainer></div>
-          <details className="chart-table"><summary>View cumulative flow data table</summary><div className="table-scroll"><table className="data-table"><thead><tr><th>Date</th>{STATUSES.map(s => <th key={s}>{s} (items)</th>)}</tr></thead><tbody>{rows.map(r => <tr key={r.date}><td>{r.date}</td>{STATUSES.map(s => <td key={s}>{r.counts[s]}</td>)}</tr>)}</tbody></table></div></details>
+          <details className="chart-table"><summary>View cumulative flow data table</summary><div className="table-scroll"><FlowTable rows={actualRows} className="data-table timeline-table"/></div></details>
         </> : <div className="empty">{emptyCopy}</div>}
       </section>
       <div className="inline-note"><CircleHelp size={16}/> Completed sprint results are frozen. Metrics replay the recorded status and scope events for the selected sprint.</div>
@@ -143,7 +167,9 @@ export function Analytics({ project }: { project: Project }) {
           <tr><th>Project</th><td>{summary.projectName}</td><th>Sprint</th><td>{summary.sprintName}</td></tr>
           <tr><th>Goal</th><td colSpan={3}>{summary.goal || '—'}</td></tr>
           <tr><th>Dates</th><td>{summary.start} to {summary.end}</td><th>Timezone</th><td>{summary.timezone}</td></tr>
-          <tr><th>Data cutoff</th><td colSpan={3}>{formatCutoff(summary.cutoff)}</td></tr>
+          <tr><th>Actual start</th><td>{startLabel(summary.timeline)}</td><th>Planned end</th><td>{summary.timeline.plannedEnd ? calendar.describe(summary.timeline.plannedEnd) : '—'}</td></tr>
+          <tr><th>Timezone source</th><td colSpan={3}>{timezoneSource(summary.timeline)}</td></tr>
+          <tr><th>Data cutoff</th><td colSpan={3}>{calendar.describe(summary.cutoff)}{rows.some(r => r.partial) ? ' · today partial' : ''}</td></tr>
         </tbody></table>
         <h2>Metrics</h2>
         <table className="print-table"><tbody>
@@ -157,6 +183,10 @@ export function Analytics({ project }: { project: Project }) {
           <thead><tr><th>Key</th><th>Title</th><th>Points</th><th>Final status</th><th>Original commitment</th><th>Added mid-sprint</th></tr></thead>
           <tbody>{summary.outcomes.map(o => <tr key={o.itemId}><td>{o.key}</td><td>{o.title}</td><td>{o.points}</td><td>{o.status}</td><td>{o.original ? 'Yes' : 'No'}</td><td>{o.addedMidSprint ? 'Yes' : 'No'}</td></tr>)}</tbody>
         </table>
+        <h2>Burndown timeline</h2>
+        <BurndownTable rows={rows} className="print-table print-timeline"/>
+        <h2>Cumulative flow</h2>
+        <FlowTable rows={actualRows} className="print-table print-timeline"/>
         <p className="print-note">Items removed during the sprint keep their last recorded status. Generated from sprint events at the data cutoff.</p>
       </section>, document.body)}
     </> : <div className="empty panel"><BarChart3 size={22}/><h2>{project.sprints.length ? 'No sprint data yet' : 'No sprints to show'}</h2><p>{project.sprints.length ? 'Start the sprint to begin recording burndown, velocity and flow.' : 'Create a sprint in Sprint planning, allocate work and start it; analytics fill in from there.'}</p><Link className="button secondary" href={`/projects/${project.id}/planning`}>Go to Sprint planning</Link></div>}
