@@ -8,7 +8,7 @@ import { Project, STATUSES } from '@/features/demo/model';
 import { completionLabel, localDate, series, sprintSummary, sprintSummaryCsv, velocity } from '@/features/demo/metrics';
 import { Pill } from './ui';
 
-const colors = { original: '#315A70', current: '#236A51', ideal: '#8B98A1', 'To Do': '#D9E0E5', 'In Progress': '#315A70', 'Code Review': '#668597', Testing: '#B08342', Done: '#236A51' };
+const colors = { original: '#111111', current: '#F2561D', ideal: '#9E9E9E', 'To Do': '#DEDEDE', 'In Progress': '#F2561D', 'Code Review': '#F8A07D', Testing: '#707070', Done: '#111111' };
 const chartMargin = { top: 8, right: 12, left: -18, bottom: 0 };
 
 export function Analytics({ project }: { project: Project }) {
@@ -85,12 +85,12 @@ export function Analytics({ project }: { project: Project }) {
           <div className="panel-head"><div><strong>Burndown</strong><span>Original commitment, current scope, and ideal · story points</span></div><Pill tone="neutral">{sprint.state}</Pill></div>
           {rows.length ? <>
             <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={280}><LineChart data={chartRows} margin={chartMargin}>
-              <CartesianGrid stroke="#E8ECEF" vertical={false}/>
-              <XAxis dataKey="day" tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
-              <YAxis tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <CartesianGrid stroke="#EBEBEB" vertical={false}/>
+              <XAxis dataKey="day" tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <YAxis tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
               <Tooltip/>
               <Legend/>
-              {scopeDates.map(date => <ReferenceLine key={date} x={date} stroke="#A17635" strokeDasharray="3 4" label={{ value: 'Scope', position: 'top', fontSize: 10, fill: '#865500' }}/>)}
+              {scopeDates.map(date => <ReferenceLine key={date} x={date} stroke="#F2561D" strokeDasharray="3 4" label={{ value: 'Scope', position: 'top', fontSize: 10, fill: '#865500' }}/>)}
               <Line isAnimationActive={false} type="linear" dataKey="original" name="Original remaining" stroke={colors.original} strokeWidth={2.5} dot={false}/>
               <Line isAnimationActive={false} type="linear" dataKey="current" name="Current scope remaining" stroke={colors.current} strokeWidth={2} dot={false}/>
               <Line isAnimationActive={false} type="linear" dataKey="ideal" name="Ideal" stroke={colors.ideal} strokeDasharray="5 4" strokeWidth={2} dot={false}/>
@@ -104,12 +104,12 @@ export function Analytics({ project }: { project: Project }) {
           <div className="panel-head"><div><strong>Velocity</strong><span>Completed sprints only · story points</span></div></div>
           {v.length ? <>
             <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={280}><BarChart data={v} margin={chartMargin}>
-              <CartesianGrid stroke="#E8ECEF" vertical={false}/>
-              <XAxis dataKey="name" tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
-              <YAxis tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <CartesianGrid stroke="#EBEBEB" vertical={false}/>
+              <XAxis dataKey="name" tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
+              <YAxis tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
               <Tooltip/>
               <Legend/>
-              <Bar isAnimationActive={false} dataKey="committed" name="Original committed" fill="#A9B7C0" radius={[3,3,0,0]}/>
+              <Bar isAnimationActive={false} dataKey="committed" name="Original committed" fill="#BDBDBD" radius={[3,3,0,0]}/>
               <Bar isAnimationActive={false} dataKey="delivered" name="Delivered" fill={colors.original} radius={[3,3,0,0]}/>
             </BarChart></ResponsiveContainer></div>
             <details className="chart-table"><summary>View velocity data table</summary><div className="table-scroll"><table className="data-table"><thead><tr><th>Sprint</th><th>Original committed (pts)</th><th>Added scope (pts)</th><th>Delivered (pts)</th></tr></thead><tbody>{v.map(r => <tr key={r.name}><td>{r.name}</td><td>{r.committed}</td><td>{r.added}</td><td>{r.delivered}</td></tr>)}</tbody></table></div></details>
@@ -121,9 +121,9 @@ export function Analytics({ project }: { project: Project }) {
         <div className="panel-head"><div><strong>Cumulative flow</strong><span>Included work items by latest status at each day end · item count</span></div></div>
         {rows.length ? <>
           <div className="chart-wrap" aria-hidden="true"><ResponsiveContainer width="100%" height={290}><AreaChart data={chartRows} margin={chartMargin}>
-            <CartesianGrid stroke="#E8ECEF" vertical={false}/>
-            <XAxis dataKey="day" tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
-            <YAxis allowDecimals={false} tick={{ fill: '#52616D', fontSize: 11 }} tickLine={false} axisLine={false}/>
+            <CartesianGrid stroke="#EBEBEB" vertical={false}/>
+            <XAxis dataKey="day" tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
+            <YAxis allowDecimals={false} tick={{ fill: '#5F5F5F', fontSize: 11 }} tickLine={false} axisLine={false}/>
             <Tooltip/>
             <Legend/>
             {STATUSES.map(status => <Area isAnimationActive={false} key={status} type="stepAfter" dataKey={`counts.${status}`} name={status} stackId="count" fill={colors[status]} stroke={colors[status]}/>)}
