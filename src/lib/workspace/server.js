@@ -60,6 +60,9 @@ export async function loadWorkspace(supabase, user) {
     must(pick(supabase.from('work_item_status_history').select('id, project_id, work_item_id, new_status, actor_id, sprint_id, created_at, seq').in('project_id', projectIds).order('seq'))),
   ]);
 
+  // The owner keeps full authority whatever Scrum role they pick (mirrors tf_require_role).
+  for (const p of projects) if (p.owner_id === user.id) roles[p.id] = 'Product Owner';
+
   const sprintIds = sprints.map(s => s.id);
   const pickSprints = (query) => (sprintIds.length ? query : Promise.resolve(empty));
   const [commitments, scope, invitations, comments, attachments, activity, evidence, notifications, inbox, joinCodes] = await Promise.all([
@@ -94,7 +97,7 @@ export async function loadWorkspace(supabase, user) {
   const state = {
     version: 1,
     entered: true,
-    role: memberships[0]?.role ?? 'Viewer',
+    role: roles[memberships[0]?.project_id] ?? memberships[0]?.role ?? 'Viewer',
     projects: projects.map(p => {
       const projectSprints = sprints.filter(s => s.project_id === p.id);
       const events = [

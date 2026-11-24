@@ -144,6 +144,24 @@ check(p.invitations !== undefined && (await dev.ws()).state.projects.find(x => x
   check(anonJoin.status === 401, 'signed-out visitors must sign in before joining (401)');
 }
 
+// ---- Owner can never lock themselves out ------------------------------------
+{
+  const ownerId = p.ownerId;
+  r = await po.act({ type: 'set-role', projectId: pid, userId: ownerId, role: 'Developer' });
+  check(r.status === 200, 'owner changes their own Scrum role to Developer', S(r));
+  const ownerWs = await po.ws();
+  check(ownerWs.roles[pid] === 'Product Owner', 'owner keeps full authority after self-demotion', ownerWs.roles[pid]);
+  check(fire(ownerWs).members.find(m => m.id === ownerId).role === 'Developer', 'owner\'s displayed Scrum role is Developer');
+  check((await po.act({ type: 'set-role', projectId: pid, userId: hamza, role: 'Developer' })).status === 200, 'self-demoted owner can still change others\' roles');
+  await po.act({ type: 'set-role', projectId: pid, userId: hamza, role: 'Scrum Master' });
+  const b0 = fire(ownerWs).items.filter(i => !i.sprintId).sort((a, b) => a.order - b.order);
+  check((await po.act({ type: 'prioritize', projectId: pid, itemId: b0[1].id, direction: -1 })).status === 200, 'self-demoted owner can still reorder the backlog (PO-only)');
+  await po.act({ type: 'prioritize', projectId: pid, itemId: b0[1].id, direction: 1 });
+  check((await po.act({ type: 'set-role', projectId: pid, userId: ownerId, role: 'Product Owner' })).status === 200, 'owner switches back to Product Owner');
+  check((await dev.act({ type: 'set-role', projectId: pid, userId: hamza, role: 'Developer' })).status === 403, 'non-owner developers are still refused (403)');
+  check((await sm.act({ type: 'set-role', projectId: pid, userId: ownerId, role: 'Viewer' })).status === 403, 'nobody else can change the owner\'s role (403)');
+}
+
 // ---- Priority is Product Owner only (§3) ----------------------------------
 const prio = backlogItem.priority;
 const other = prio === 'High' ? 'Low' : 'High';
