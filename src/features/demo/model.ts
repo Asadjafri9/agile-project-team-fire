@@ -1,6 +1,6 @@
 export const STATUSES = ['To Do', 'In Progress', 'Code Review', 'Testing', 'Done'] as const;
 export type Status = typeof STATUSES[number];
-export type Role = 'Product Owner' | 'Scrum Master' | 'Developer' | 'Viewer';
+export type Role = 'Product Owner' | 'Scrum Master' | 'Developer' | 'QA Tester' | 'Viewer';
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 export type ItemType = 'Story' | 'Task' | 'Bug';
 export type SprintState = 'planned' | 'active' | 'completed';

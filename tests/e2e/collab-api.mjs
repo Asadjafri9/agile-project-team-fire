@@ -162,6 +162,36 @@ check(p.invitations !== undefined && (await dev.ws()).state.projects.find(x => x
   check((await sm.act({ type: 'set-role', projectId: pid, userId: ownerId, role: 'Viewer' })).status === 403, 'nobody else can change the owner\'s role (403)');
 }
 
+// ---- QA Tester role ----------------------------------------------------------------
+{
+  r = await sm.act({ type: 'invite', projectId: pid, username: 'casey', role: 'QA Tester' });
+  check(r.status === 200, 'scrum master invites casey as QA Tester', S(r));
+  const qaInv = (await casey.ws()).inbox.find(i => i.projectId === pid);
+  check(qaInv?.role === 'QA Tester', 'invitation offers the QA Tester role');
+  await casey.act({ type: 'respond-invite', invitationId: qaInv.id, accept: true });
+  const qws = await casey.ws();
+  check(qws.roles[pid] === 'QA Tester', 'casey is a QA Tester', qws.roles[pid]);
+  const qp = fire(qws);
+  const target = qp.items.find(i => i.sprintId && qp.sprints.find(s => s.id === i.sprintId)?.state === 'active' && i.status !== 'Done');
+  const back = target.status;
+  check((await casey.act({ type: 'move', projectId: pid, itemId: target.id, status: back === 'Testing' ? 'In Progress' : 'Testing' })).status === 200, 'QA Tester moves a card');
+  await casey.act({ type: 'move', projectId: pid, itemId: target.id, status: back });
+  r = await casey.act({ type: 'create-item', projectId: pid, title: 'E2E QA bug', typeName: 'Bug', points: 1, priority: 'Low' });
+  check(r.status === 200, 'QA Tester files a bug');
+  const qaBug = r.json?.data?.id;
+  check((await casey.act({ type: 'comment', projectId: pid, itemId: target.id, body: 'E2E QA: verified on staging', mentions: [] })).status === 200, 'QA Tester comments');
+  check((await casey.act({ type: 'set-role', projectId: pid, userId: hamza, role: 'Developer' })).status === 403, 'QA Tester cannot change roles (403)');
+  check((await casey.act({ type: 'start', projectId: pid, sprintId: qp.sprints.find(s => s.state === 'planned').id })).status === 403, 'QA Tester cannot start sprints (403)');
+  check((await casey.act({ type: 'prioritize', projectId: pid, itemId: backlogItem.id, direction: 1 })).status === 403, 'QA Tester cannot reorder the backlog (403)');
+  check((await casey.act({ type: 'archive-item', projectId: pid, itemId: qaBug, reason: 'x' })).status === 403, 'QA Tester cannot archive (403)');
+  check((await casey.act({ type: 'set-wip', projectId: pid, limits: { Testing: 4 } })).status === 403, 'QA Tester cannot configure WIP (403)');
+  r = await sm.act({ type: 'create-join-code', projectId: pid, role: 'QA Tester', days: 1, maxUses: 1 });
+  check(r.status === 200, 'invite links can grant QA Tester');
+  await sm.act({ type: 'revoke-join-code', projectId: pid, codeId: r.json?.data?.id });
+  await po.act({ type: 'archive-item', projectId: pid, itemId: qaBug, reason: 'E2E cleanup' });
+  check((await sm.act({ type: 'remove-member', projectId: pid, userId: qws.user.id })).status === 200, 'QA Tester removed (cleanup)');
+}
+
 // ---- Priority is Product Owner only (§3) ----------------------------------
 const prio = backlogItem.priority;
 const other = prio === 'High' ? 'Low' : 'High';

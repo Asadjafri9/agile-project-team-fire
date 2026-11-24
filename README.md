@@ -13,6 +13,7 @@ Sign in on the home page with one of the demo accounts. Each holds a different r
 | `ayesha` | Product Owner | everything, including backlog ordering |
 | `hamza` | Scrum Master | plan, start and complete sprints; move cards |
 | `zara`, `bilal` | Developer | create and edit items, move cards |
+| — | QA Tester | same working rights as Developer (file bugs, move cards, comment, attach); assign it from **Team** ([ADR-015](docs/adr/015-qa-tester-role.md)) |
 | `assessor` | Viewer | read everything, change nothing |
 | `casey` | none yet | invite this account from **Team** to try invitations |
 

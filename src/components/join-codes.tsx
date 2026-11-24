@@ -30,7 +30,7 @@ export function InviteLinks({ project }: { project: Project }) {
     <div className="panel-head"><div><strong>Invite link or code</strong><span>Anyone signed in with the link or code joins with the role you choose. Links never grant Product Owner.</span></div></div>
     <form className="sub-form" onSubmit={create}>
       <div className="form-grid">
-        <label>Role<select value={role} onChange={e => setRole(e.target.value as Role)} disabled={syncing}><option>Developer</option><option>Viewer</option><option>Scrum Master</option></select></label>
+        <label>Role<select value={role} onChange={e => setRole(e.target.value as Role)} disabled={syncing}><option>Developer</option><option>QA Tester</option><option>Viewer</option><option>Scrum Master</option></select></label>
         <label>Expires after<select value={days} onChange={e => setDays(Number(e.target.value))} disabled={syncing}><option value={1}>1 day</option><option value={7}>7 days</option><option value={14}>14 days</option><option value={30}>30 days</option></select></label>
         <label>Use limit (optional)<input type="number" min={1} max={500} inputMode="numeric" placeholder="Unlimited" value={maxUses} onChange={e => setMaxUses(e.target.value)} disabled={syncing}/></label>
       </div>

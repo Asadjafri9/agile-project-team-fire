@@ -81,3 +81,15 @@ describe('issue #10: planned-sprint allocations do not touch the active sprint',
     expect(after.scopeChangeCount).toBe(0);
   });
 });
+
+describe('QA Tester role', () => {
+  it('has Developer-level working rights and no management rights', () => {
+    for (const cap of ['create', 'move', 'comment', 'attach', 'evidence'] as const) expect(allowed('QA Tester', cap)).toBe(true);
+    for (const cap of ['plan', 'complete', 'prioritize', 'team', 'archive', 'wip'] as const) expect(allowed('QA Tester', cap)).toBe(false);
+  });
+  it('can move a card in demo mode', () => {
+    const qa = reduceDemo(fresh(), { type: 'role', role: 'QA Tester' });
+    const moved = reduceDemo(qa, { type: 'move', projectId: 'team-fire', itemId: 'i107', status: 'In Progress' });
+    expect(moved.projects[0].items.find(i => i.id === 'i107')?.status).toBe('In Progress');
+  });
+});
