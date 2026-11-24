@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Team Fire — Live demo script</title>
+<style>
+  :root{--ink:#111;--muted:#5F5F5F;--border:#DEDEDE;--bg:#F7F7F7;--soft:#F3F3F3;--accent:#C8431A;--brand:#F2561D;--brand-soft:#FFF1EB;--brand-line:#F8C9B5;--green:#236A51;--green-soft:#EDF6F1}
+  @page{size:A4;margin:0}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--ink);font-size:8.9pt;line-height:1.36;background:#fff}
+  .page{width:210mm;height:296.6mm;overflow:hidden;padding:0 0 14mm;position:relative;page-break-after:always;background:var(--bg)}
+  .page:last-child{page-break-after:auto}
+  .top{height:13mm;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:0 14mm}
+  .mark{width:8.5mm;height:8.5mm;border-radius:2mm;background:#111;display:grid;place-items:center}
+  .mark svg{width:5mm;height:5mm}
+  .brand{font-weight:700;font-size:13pt;letter-spacing:-.02em}.brand i{font-style:normal;color:var(--brand)}
+  .live{margin-left:auto;background:#111;color:#fff;font-size:7pt;font-weight:700;letter-spacing:.1em;padding:1.4mm 2.4mm;border-radius:1mm}
+  .crumb{color:#858585;font-size:8pt;margin-left:6mm}
+  .body{padding:6mm 13mm 0}
+  .eyebrow{color:var(--accent);font-size:7.5pt;font-weight:800;letter-spacing:.13em;text-transform:uppercase;margin:0 0 2.5mm}
+  h1{font-size:21pt;line-height:1.1;letter-spacing:-.035em;margin:0 0 2mm}
+  h2{font-size:13.5pt;letter-spacing:-.02em;margin:0}
+  .lead{color:var(--muted);font-size:9.4pt;margin:0 0 4mm;max-width:160mm}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:2.2mm;margin-bottom:3.2mm;break-inside:avoid}
+  .panel-head{padding:2.6mm 4mm;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:4mm}
+  .panel-head span{color:var(--muted);font-size:8.5pt}
+  .panel-body{padding:2.8mm 4mm}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:2.5mm;margin-bottom:3.2mm}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:2.2mm;padding:2.4mm 3.2mm}
+  .stat span{display:block;color:var(--muted);font-size:7.8pt}
+  .stat strong{display:block;font-size:10.5pt;letter-spacing:-.02em;margin-top:1mm}
+  table{width:100%;border-collapse:collapse}
+  th{background:#FBFBFB;text-align:left;font-size:6.6pt;letter-spacing:.08em;text-transform:uppercase;color:#6F6F6F;padding:1.8mm 4mm;font-weight:700}
+  td{border-top:1px solid #EBEBEB;padding:1.9mm 4mm;vertical-align:top}
+  .pill{display:inline-block;border-radius:1mm;padding:.8mm 2mm;font-size:7.5pt;font-weight:700;white-space:nowrap;border:1px solid var(--border);background:var(--soft);color:#444}
+  .r-po{background:#111;border-color:#111;color:#fff}
+  .r-sm{background:var(--brand);border-color:var(--brand);color:#111}
+  .r-dev{background:var(--brand-soft);border-color:var(--brand-line);color:#B83A10}
+  .r-qa{background:#fff;border-color:var(--brand);color:#B83A10}
+  .r-view{background:#fff;border-color:#BDBDBD;color:#444}
+  .blank{display:inline-block;min-width:38mm;border-bottom:1px solid #BDBDBD;height:4mm}
+  .muted{color:var(--muted)}
+  .scene{background:#fff;border:1px solid var(--border);border-radius:2.2mm;margin-bottom:2.8mm;break-inside:avoid;overflow:hidden}
+  .scene-head{display:flex;align-items:center;gap:2.5mm;padding:2.1mm 4mm;border-bottom:1px solid var(--border)}
+  .num{width:6mm;height:6mm;border-radius:50%;background:#111;color:#fff;display:grid;place-items:center;font-weight:700;font-size:9pt;flex:0 0 auto}
+  .scene-head h2{font-size:10.5pt;flex:1}
+  .time{color:var(--muted);font-size:8pt;white-space:nowrap}
+  .scene-body{display:grid;grid-template-columns:1.35fr 1fr;gap:0}
+  .do{padding:2.2mm 4mm 2.4mm}
+  .say{padding:2.2mm 4mm 2.4mm;background:var(--brand-soft);border-left:1px solid var(--brand-line)}
+  .say>b,.do>b.lbl{display:block;font-size:7pt;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:1.4mm}
+  ol{margin:0;padding-left:4.6mm}ol li{margin:0 0 .7mm}
+  ul.sq{list-style:none;margin:0;padding:0}ul.sq li{position:relative;padding-left:3.6mm;margin:0 0 .8mm}
+  ul.sq li:before{content:"";position:absolute;left:0;top:1.3mm;width:1.6mm;height:1.6mm;background:var(--brand)}
+  .who{font-size:8pt;color:var(--muted);margin-left:1mm}
+  .ui{font-weight:700;white-space:nowrap}
+  .req{display:inline-block;font-size:7pt;font-weight:700;color:#6F6F6F;border:1px solid var(--border);border-radius:1mm;padding:.3mm 1.2mm;margin:0 .6mm .6mm 0;background:#FBFBFB}
+  .callout{display:flex;gap:3mm;background:#fff;border:1px solid var(--brand-line);border-left:1.2mm solid var(--brand);border-radius:2.2mm;padding:2.6mm 4mm;margin-bottom:3mm;break-inside:avoid}
+  .callout p{margin:0}
+  .foot{position:absolute;left:14mm;right:14mm;bottom:6mm;display:flex;justify-content:space-between;color:#858585;font-size:7.5pt;border-top:1px solid var(--border);padding-top:2mm}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:3mm}
+  .check li:before{background:#111}
+  .new{display:inline-block;background:var(--brand);color:#111;font-size:6.5pt;font-weight:800;letter-spacing:.08em;border-radius:1mm;padding:.4mm 1.4mm;margin-left:1.5mm;vertical-align:1px}
+</style>
+</head>
+<body>
+
+<!-- PAGE 1: cast and preparation -->
+<section class="page">
+  <div class="top">
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#F2561D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+    <span class="brand">Team Fire<i>.</i></span><span class="crumb">Live demo script · Course examination</span>
+    <span class="live">LIVE</span>
+  </div>
+  <div class="body">
+    <div class="eyebrow">Demo script · 25 November 2026</div>
+    <h1>Five roles, one sprint, live.</h1>
+    <p class="lead">Each presenter drives one part of a real sprint on the live site while the examiner follows as a read-only Viewer. Every step below uses the exact button names on screen.</p>
+
+    <div class="meta">
+      <div class="stat"><span>Site</span><strong>team-fire-agile.vercel.app</strong></div>
+      <div class="stat"><span>Length</span><strong>≈ 15 minutes</strong></div>
+      <div class="stat"><span>Presenters</span><strong>4 + examiner</strong></div>
+      <div class="stat"><span>Project</span><strong>Your own project</strong></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Cast</h2><span>Fill in names before the session</span></div>
+      <table>
+        <thead><tr><th style="width:27mm">Role</th><th style="width:52mm">Presenter</th><th>Shows the examiner</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill r-po">Product Owner</span></td><td><strong>Syed Sibtain Haider</strong><br><span class="muted">project owner</span></td><td>Joining with an invite link, the backlog, priority, acceptance checklists, analytics and exports, and the security of owner rights</td></tr>
+          <tr><td><span class="pill r-sm">Scrum Master</span></td><td><span class="blank"></span></td><td>Planning a sprint against capacity, starting it, a recorded scope change, and completing it with carry-over</td></tr>
+          <tr><td><span class="pill r-dev">Developer</span></td><td><span class="blank"></span></td><td>Moving cards on the board, WIP warnings, @mentions and attachments</td></tr>
+          <tr><td><span class="pill r-qa">QA Tester</span></td><td><span class="blank"></span><br><span class="muted">e.g. Fasih Abdullah (QA lead)</span></td><td>Opening a mention straight from a notification, the Definition of Done gate, and filing a bug</td></tr>
+          <tr><td><span class="pill r-view">Viewer</span></td><td><strong>Course examiner</strong></td><td>Signs up live, joins with a code, and sees everything but can change nothing</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <div class="panel-head"><h2>15 minutes before</h2><span>Product Owner</span></div>
+        <div class="panel-body"><ul class="sq">
+          <li><b>Team</b> → <span class="ui">Create invite link</span> three times: <b>Scrum Master</b>, <b>Developer</b> and <b>QA Tester</b>, each with <b>Use limit 1</b>. Send each presenter their link.</li>
+          <li>Create one more link, for <b>Viewer</b>: <b>1 day</b>, <b>Use limit 1</b>. Keep its code ready for the examiner.</li>
+          <li><b>Backlog</b>: at least <b>5 items</b>, each estimated (1, 2, 3, 5, 8 or 13 points). Give one of them a <b>2-item checklist</b>.</li>
+          <li><b>Settings</b> → WIP limit <b>In Progress = 2</b>, so the warning appears during the demo.</li>
+          <li><b>Sprint planning</b>: make sure <b>no sprint is active</b> (complete any running one). Only one sprint can be active at a time.</li>
+        </ul></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>Each presenter</h2><span>Before the start</span></div>
+        <div class="panel-body"><ul class="sq check">
+          <li>Open your invite link, then sign in or <span class="ui">Create account</span>. You join the project automatically.</li>
+          <li>Use <b>your own laptop</b> or a separate browser profile. Two accounts in one browser share a session.</li>
+          <li>Keep the project open on your scene's page (see the scenes).</li>
+          <li>Leave the <b>bell</b> in the top bar visible. Mentions arrive there within about 4 seconds.</li>
+        </ul></div>
+      </div>
+    </div>
+
+    <div class="callout"><p><b>Golden rule:</b> say what you're about to click, click it, then point at the result. Every action is saved to the database and appears on everyone's screen within about 4 seconds, so presenters can hand over to each other without refreshing.</p></div>
+  </div>
+  <div class="foot"><span>Team Fire · Agile Software Project Management</span><span>1 / 3</span></div>
+</section>
+
+<!-- PAGE 2: scenes 1-4 -->
+<section class="page">
+  <div class="top">
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#F2561D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+    <span class="brand">Team Fire<i>.</i></span><span class="crumb">Scenes 1–4</span><span class="live">LIVE</span>
+  </div>
+  <div class="body">
+    <div class="eyebrow">Run of show</div>
+    <h1 style="font-size:17pt">From invite to a running sprint</h1>
+    <p class="lead" style="margin-bottom:3mm">Run the scenes in order. Each shows who is presenting, what to click, and what to point out.</p>
+
+    <div class="scene"><div class="scene-head"><span class="num">1</span><h2>The examiner joins as a Viewer</h2><span class="pill r-po">Product Owner</span><span class="pill r-view">Viewer</span><span class="time">2 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>PO:</b> on <b>Team</b>, show the members table and the 5 roles. Read out the Viewer code (e.g. <b>7KQ2-9XMA</b>).</li>
+        <li><b>Examiner:</b> open the site → <span class="ui">Create account</span> (email, username, password) → on <b>Projects</b>, paste the code under <span class="ui">Join a project</span> → <span class="ui">Join project</span>.</li>
+        <li><b>Examiner:</b> lands in the project with <b>Viewer</b> in the sidebar.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Sign in with an email <i>or</i> a username.</li>
+        <li>Invite links pick a role, an expiry and a use limit, and can be revoked. They never grant Product Owner.</li>
+      </ul><div style="margin-top:1mm"><span class="req">AUTH-01</span><span class="req">PROJ-02</span><span class="req">WBS 4.1</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">2</span><h2>Shape the backlog</h2><span class="pill r-po">Product Owner</span><span class="time">2 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Backlog</b> → <span class="ui">New item</span>: Story “Export sprint report”, <b>5 points</b>, priority <b>High</b>.</li>
+        <li>Open it. Under <b>Definition of Done checklist</b>, add “CSV matches dashboard” and “PDF prints on A4” with <span class="ui">Add subtask</span>.</li>
+        <li>Close it, then use the ↑ arrows to move it to the <b>top</b> of the backlog.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Story points only accept 1, 2, 3, 5, 8 or 13.</li>
+        <li>Only the Product Owner sets priority and order. The <b>examiner's screen has no New item button</b>.</li>
+      </ul><div style="margin-top:1mm"><span class="req">ITEM-01</span><span class="req">ITEM-03</span><span class="req">ITEM-04</span><span class="req">ITEM-05</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">3</span><h2>Plan and start the sprint</h2><span class="pill r-sm">Scrum Master</span><span class="time">2.5 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Sprint planning</b> → <span class="ui">New sprint</span>: name, <b>goal</b>, start <b>today</b>, end <b>+13 days</b>, capacity <b>20 pts / 70 h</b> → <span class="ui">Create sprint</span>.</li>
+        <li><span class="ui">Add</span> 4 backlog items, including “Export sprint report”. Watch the <b>Commitment check</b> fill up.</li>
+        <li>Show the <b>Before you start</b> checklist turn green, then click <span class="ui">Start sprint</span>.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Starting is blocked until there's a goal, valid dates and only estimated items.</li>
+        <li>At start, the commitment is <b>frozen</b>. It's the baseline for the burndown.</li>
+      </ul><div style="margin-top:1mm"><span class="req">SPR-01</span><span class="req">SPR-02</span><span class="req">SPR-04</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">4</span><h2>Work the board</h2><span class="pill r-dev">Developer</span><span class="time">2 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Board</b>: drag two cards to <b>In Progress</b>, then a third, so the <b>Over WIP limit</b> warning appears.</li>
+        <li>Move “Export sprint report” to <b>Code Review</b>. Open it and attach a screenshot.</li>
+        <li>In <b>Comment</b>, write “Ready for testing”, pick the QA Tester under <b>Mention</b> → <span class="ui">Post comment</span>.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>WIP limits warn but don't block, as agreed in our requirements.</li>
+        <li>Files are private: only project members can open them, through a link that expires after a minute.</li>
+      </ul><div style="margin-top:1mm"><span class="req">BOARD-02</span><span class="req">BOARD-05</span><span class="req">REL-02</span><span class="req">COL-04</span></div></div></div></div>
+  </div>
+  <div class="foot"><span>Team Fire · Agile Software Project Management</span><span>2 / 3</span></div>
+</section>
+
+<!-- PAGE 3: scenes 5-8 + fallback -->
+<section class="page">
+  <div class="top">
+    <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#F2561D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></span>
+    <span class="brand">Team Fire<i>.</i></span><span class="crumb">Scenes 5–8</span><span class="live">LIVE</span>
+  </div>
+  <div class="body">
+    <div class="eyebrow">Run of show</div>
+    <h1 style="font-size:17pt">Quality, change and the numbers</h1>
+    <p class="lead" style="margin-bottom:3mm">The QA Tester picks up straight from the Developer's mention.</p>
+
+    <div class="scene"><div class="scene-head"><span class="num">5</span><h2>Test and close the story <span class="new">NEW</span></h2><span class="pill r-qa">QA Tester</span><span class="time">2.5 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li>Click the <b>bell</b> → the mention. You land <b>on that comment</b>, highlighted in orange.</li>
+        <li>Move the card to <b>Testing</b>. Try <b>Done</b>: it's refused while the checklist is open.</li>
+        <li>Tick both checklist items → move to <b>Done</b>.</li>
+        <li><b>Backlog</b> → <span class="ui">New item</span>: type <b>Bug</b>, “CSV header misses timezone”, <b>2 points</b> (it needs an estimate to join the active sprint).</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Notifications open the exact comment, on the right screen.</li>
+        <li>Done requires the Definition of Done.</li>
+        <li>QA Testers have working rights, but not planning or priority.</li>
+      </ul><div style="margin-top:1mm"><span class="req">BOARD-06</span><span class="req">COL-04</span><span class="req">ITEM-03</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">6</span><h2>Change scope, then complete the sprint</h2><span class="pill r-sm">Scrum Master</span><span class="time">2 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Sprint planning</b>: <span class="ui">Add</span> the new bug to the active sprint. The dialog asks <b>“Why is the active sprint changing?”</b>, so type a reason and <span class="ui">Move item</span>.</li>
+        <li><span class="ui">Complete sprint</span> → under <b>Move unresolved items to</b>, pick Backlog or a planned sprint → confirm.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Scope changes are recorded with who, when and why. The original commitment never changes.</li>
+        <li>Results freeze at completion.</li>
+      </ul><div style="margin-top:1mm"><span class="req">SPR-05</span><span class="req">SPR-06</span><span class="req">MET-01</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">7</span><h2>Analytics, exports and evidence</h2><span class="pill r-po">Product Owner</span><span class="pill r-view">Viewer</span><span class="time">2 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Analytics</b>: pick the sprint and walk through <b>Burndown</b>, <b>Velocity</b> and <b>Cumulative flow</b>.</li>
+        <li><span class="ui">Download CSV</span>, then <span class="ui">Download PDF</span> (choose <i>Save as PDF</i>).</li>
+        <li><b>Evidence</b>: attach the PDF → <span class="ui">Upload and add evidence</span>.</li>
+        <li><b>Examiner:</b> download the same summary as a Viewer.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Charts are rebuilt from recorded events, not from today's cards.</li>
+        <li>The CSV and PDF use exactly the dashboard's numbers.</li>
+      </ul><div style="margin-top:1mm"><span class="req">MET-02</span><span class="req">MET-03</span><span class="req">MET-04</span><span class="req">REL-01</span></div></div></div></div>
+
+    <div class="scene"><div class="scene-head"><span class="num">8</span><h2>Prove the permissions</h2><span class="pill r-view">Viewer</span><span class="pill r-po">Product Owner</span><span class="time">1 min</span></div>
+      <div class="scene-body"><div class="do"><b class="lbl">Do</b><ol>
+        <li><b>Examiner:</b> try to drag a card or open <b>Settings</b>: everything is read-only.</li>
+        <li><b>PO:</b> on <b>Team</b>, set your own role to <b>Developer</b>. Your controls stay, so set it back to <b>Product Owner</b>.</li>
+      </ol></div>
+      <div class="say"><b>Point out</b><ul class="sq">
+        <li>Permissions are enforced in the database, not just hidden buttons. Calls that bypass the app are refused too.</li>
+        <li>The owner can never lock themselves out.</li>
+      </ul><div style="margin-top:1mm"><span class="req">PROJ-03</span><span class="req">PROJ-04</span><span class="req">§3 roles</span></div></div></div></div>
+
+    <div class="callout"><p><b>If something goes wrong:</b> refresh the page, because every change is already saved. If the network drops, use <b>Explore demo</b> on the home page, which runs the same interface on sample data. A sprint started today has only a day of history; for full charts, show the seeded <b>Team Fire</b> project or Explore demo.</p></div>
+  </div>
+  <div class="foot"><span>Team Fire · Agile Software Project Management</span><span>3 / 3</span></div>
+</section>
+</body>
+</html>
