@@ -14,7 +14,7 @@ const COMMENT_MAX = 4000;
 const POINT_OPTIONS = [1, 2, 3, 5, 8, 13];
 
 function memberName(project: Project, id: string): string {
-  return project.members.find(m => m.id === id)?.name ?? id;
+  return project.members.find(m => m.id === id)?.name ?? (/^[0-9a-f-]{36}$/i.test(id) ? 'Former member' : id);
 }
 
 function formatSize(bytes: number): string {
@@ -64,7 +64,21 @@ export function Backlog({ project, role, onItem }: { project: Project; role: Rol
   <Modal open={newOpen} onOpenChange={setNewOpen} title="Create work item" description={mode === 'live' ? 'The item is saved to the team database.' : 'This item is saved in local demo data.'}><form className="form-stack" onSubmit={e => { e.preventDefault(); if (!title.trim()) return; dispatch({ type: 'create-item', projectId: project.id, title, typeName, priority: canPrioritize ? newPriority : 'Medium', points: points === '' ? null : Number(points) }); setNewOpen(false); setTitle(''); setPoints(''); }}><label>Title<input required value={title} onChange={e => setTitle(e.target.value)} placeholder="What needs to be delivered?"/></label><div className="form-grid"><label>Type<select value={typeName} onChange={e => setTypeName(e.target.value as ItemType)}><option>Story</option><option>Task</option><option>Bug</option></select></label>{canPrioritize && <label>Priority<select value={newPriority} onChange={e => setNewPriority(e.target.value as Priority)}>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select></label>}</div><label>Story points<select value={points} onChange={e => setPoints(e.target.value)}><option value="">Unestimated</option>{POINT_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}</select></label><div className="dialog-actions"><button type="button" className="button secondary" onClick={() => setNewOpen(false)}>Cancel</button><button type="submit" className="button primary">Create item</button></div></form></Modal></>;
 }
 
-export function ItemDetail({ project, item, role, onClose }: { project: Project; item: WorkItem | null; role: Role; onClose: () => void }) {
+export function ItemDetail({ project, item, role, onClose, focusCommentId }: { project: Project; item: WorkItem | null; role: Role; onClose: () => void; focusCommentId?: string | null }) {
+  // Opened from a mention notification: scroll the comment into view and highlight it briefly.
+  const [highlight, setHighlight] = useState<string | null>(null);
+  useEffect(() => {
+    if (!item || !focusCommentId) return;
+    let tries = 0;
+    const tick = window.setInterval(() => {
+      const el = document.getElementById(`comment-${focusCommentId}`);
+      if (el || ++tries > 20) {
+        window.clearInterval(tick);
+        if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); setHighlight(focusCommentId); window.setTimeout(() => setHighlight(null), 4000); }
+      }
+    }, 100);
+    return () => window.clearInterval(tick);
+  }, [item, focusCommentId]);
   const { dispatch, mode, user, syncing, refresh } = useDemo();
   const isLive = mode === 'live';
   const isArchived = Boolean(project.archived);
@@ -365,11 +379,11 @@ export function ItemDetail({ project, item, role, onClose }: { project: Project;
           {!isLive ? <p className="muted">{LIVE_NOTE}</p> : <>
             {comments.length
               ? <ul className="comment-list">{comments.map(comment => {
-                if (comment.deleted) return <li key={comment.id} className="comment deleted"><p className="comment-deleted">Comment deleted</p></li>;
+                if (comment.deleted) return <li key={comment.id} id={`comment-${comment.id}`} className="comment deleted"><p className="comment-deleted">Comment deleted</p></li>;
                 const isAuthor = Boolean(user && comment.authorId === user.id);
                 const canEditOwn = !isArchived && isAuthor;
                 const canDeleteComment = !isArchived && (isAuthor || canModerate);
-                return <li key={comment.id} className="comment">
+                return <li key={comment.id} id={`comment-${comment.id}`} className={`comment${highlight === comment.id ? ' comment-focus' : ''}`} aria-current={highlight === comment.id ? 'true' : undefined}>
                   {editingComment === comment.id
                     ? <div className="comment-edit">
                       <label htmlFor={`edit-comment-${comment.id}`}>Edit comment<textarea id={`edit-comment-${comment.id}`} value={commentEditBody} maxLength={COMMENT_MAX} rows={3} disabled={syncing} onChange={e => setCommentEditBody(e.target.value)}/></label>

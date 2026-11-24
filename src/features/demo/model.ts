@@ -11,7 +11,7 @@ export type Activity = { id: string; itemId: string; kind: string; actor: string
 export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
 export type Invitation = { id: string; projectId: string; projectName: string; username: string; name: string; role: Role; invitedBy: string; status: InvitationStatus; expiresAt: string; at: string };
 export type JoinCode = { id: string; code: string; role: Role; createdBy: string; at: string; expiresAt: string; maxUses: number | null; uses: number; active: boolean };
-export type Notification = { id: string; kind: 'mention' | 'invitation'; projectId: string | null; itemId: string | null; text: string; at: string; read: boolean };
+export type Notification = { id: string; kind: 'mention' | 'invitation'; projectId: string | null; itemId: string | null; commentId?: string | null; text: string; at: string; read: boolean };
 export type WorkItem = { id: string; key: string; title: string; description: string; type: ItemType; priority: Priority; points: number | null; hours: number | null; status: Status; assigneeId: string | null; epic: string; labels: string[]; wbs: string; sprintId: string | null; checklist: ChecklistEntry[]; order: number;
   /** Live mode only (absent in demo data). */
   version?: number; attachments?: Attachment[]; comments?: Comment[] };

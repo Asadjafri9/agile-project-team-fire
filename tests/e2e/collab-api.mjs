@@ -225,6 +225,7 @@ check(r.status === 200, 'developer comments with a mention', S(r));
 const commentId = r.json?.data?.id;
 const hamzaWs = await sm.ws();
 check(hamzaWs.notifications.some(n => n.kind === 'mention' && /mentioned you/.test(n.text) && !n.read), 'mentioned member is notified');
+check(hamzaWs.notifications.some(n => n.kind === 'mention' && n.commentId === commentId && n.itemId === backlogItem.id), 'mention notification links to the exact comment (deep link)');
 const stored = fire(hamzaWs).items.find(i => i.id === backlogItem.id).comments.find(c => c.id === commentId);
 check(stored && stored.mentions.length === 1, 'non-member mention ids are dropped');
 check((await sm.act({ type: 'edit-comment', projectId: pid, itemId: backlogItem.id, commentId, body: 'hijack', mentions: [] })).status === 403, 'others cannot edit your comment (403)');

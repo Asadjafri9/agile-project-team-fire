@@ -196,3 +196,6 @@
 .notif-count{background:var(--brand)}
 ::selection{background:#FDDCCD;color:#111}
 .entry-shell .entry-kicker{color:var(--accent)}
+
+/* notification deep link: the comment you were mentioned in */
+.comment-focus{outline:2px solid var(--brand);outline-offset:4px;border-radius:6px;background:var(--brand-soft);transition:background .4s}

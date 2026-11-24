@@ -74,7 +74,7 @@ export async function loadWorkspace(supabase, user) {
     must(pick(supabase.from('work_item_attachments').select('id, project_id, work_item_id, file_name, size_bytes, mime_type, uploaded_by, created_at').in('project_id', projectIds).is('removed_at', null).order('created_at'))),
     must(pick(supabase.from('work_item_activity').select('id, project_id, work_item_id, actor_id, kind, detail, created_at').in('project_id', projectIds).order('created_at', { ascending: false }).limit(500))),
     must(pick(supabase.from('project_evidence').select('id, project_id, title, version, kind, evidence_date, note, file_name, size_bytes, mime_type').in('project_id', projectIds).is('removed_at', null).order('evidence_date', { ascending: false }))),
-    must(supabase.from('notifications').select('id, kind, project_id, work_item_id, text, created_at, read_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)),
+    must(supabase.from('notifications').select('id, kind, project_id, work_item_id, comment_id, text, created_at, read_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50)),
     must(supabase.rpc('rpc_my_invitations')),
     // RLS: only managers see their projects' codes.
     must(pick(supabase.from('project_join_codes').select('id, project_id, code, role, created_by, created_at, expires_at, max_uses, uses, revoked_at').in('project_id', projectIds).order('created_at', { ascending: false }))),
@@ -227,7 +227,7 @@ export async function loadWorkspace(supabase, user) {
       role: i.role, invitedBy: i.invited_by_name, status: 'pending', expiresAt: toIso(i.expires_at), at: toIso(i.created_at),
     })),
     notifications: notifications.map(n => ({
-      id: n.id, kind: n.kind, projectId: n.project_id, itemId: n.work_item_id, text: n.text, at: toIso(n.created_at), read: Boolean(n.read_at),
+      id: n.id, kind: n.kind, projectId: n.project_id, itemId: n.work_item_id, commentId: n.comment_id ?? null, text: n.text, at: toIso(n.created_at), read: Boolean(n.read_at),
     })),
   };
 }
